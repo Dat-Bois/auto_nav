@@ -4,6 +4,8 @@ import time
 import errno
 from threading import Thread, Lock
 
+from typing import List, Tuple
+
 from rclpy_handler import RCLPY_Handler, Publisher, Subscriber, Client, Euler
 
 # MAVROS messages
@@ -143,11 +145,11 @@ class MAVROS_API:
         Returns a tuple in LLAA format.
         (lat, lon, ellipsoid_alt, relative_alt)
         '''
-        data : NavSatFix = SUB_GLOBAL_POSE.get_latest_data()
-        alt : Float64 = SUB_REL_ALT.get_latest_data()
+        data : NavSatFix = SUB_GLOBAL_POSE.get_latest_data(blocking=True)
+        alt : Float64 = SUB_REL_ALT.get_latest_data(blocking=True)
         return (data.latitude, data.longitude, data.altitude, alt.data)
 
-    def quaternion_to_euler(self, x, y, z, w):
+    def quaternion_to_euler(self, x, y, z, w) -> Euler:
         '''
         Converts a quaternion to Euler angles.
         '''
@@ -167,7 +169,7 @@ class MAVROS_API:
         return Euler(roll_x, pitch_y, yaw_z)
 
     @_connected
-    def get_local_pose(self, *, as_type : str = None) -> PoseStamped:
+    def get_local_pose(self, *, as_type : str = None) -> Tuple[Point, Quaternion, Euler] | Point | Quaternion | Euler:
         '''
         Returns three objects: one XYZ, one Quaternion, one Euler.
         ((x, y, z), (x, y, z, w), (roll, pitch, yaw))
@@ -177,7 +179,7 @@ class MAVROS_API:
         "quat" -> Quaternion
         "euler" -> Euler angles
         '''
-        data : PoseStamped = SUB_POSE.get_latest_data()
+        data : PoseStamped = SUB_POSE.get_latest_data(blocking=True)
         point : Point = data.pose.position
         quat : Quaternion = data.pose.orientation
         euler = self.quaternion_to_euler(quat.x, quat.y, quat.z, quat.w)
@@ -205,7 +207,7 @@ class MAVROS_API:
         '''
         Returns the global velocity of the drone.
         '''
-        data : TwistStamped = SUB_VEL.get_latest_data()
+        data : TwistStamped = SUB_VEL.get_latest_data(blocking=True)
         return data.twist
     
     @_connected
@@ -213,7 +215,7 @@ class MAVROS_API:
         '''
         Returns the heading of the drone in degrees.
         '''
-        data : Float64 = SUB_HDG.get_latest_data()
+        data : Float64 = SUB_HDG.get_latest_data(blocking=True)
         return data.data
     
     @_connected
@@ -224,15 +226,134 @@ class MAVROS_API:
         '''
         return SUB_RC_IN.get_latest_data()
 
+    # SETTERS ----------------------------------------------
+
+
+    def _armed_connected(func):
+        def wrapper(self : 'MAVROS_API', *args, **kwargs):
+            timeout = 10
+            while not self.is_connected() or not self.armed:
+                self.log('Waiting for drone to be armed ...')
+                time.sleep(1)
+                timeout -= 1
+                if timeout == 0:
+                    self.log("Timeout reached. Exiting function ...")
+                    return
+            return func(self, *args, **kwargs)
+        return wrapper
+
+    @_connected
+    def arm(self):
+        '''
+        Arms the drone.
+        '''
+        data = CommandBool.Request()
+        data.value = True
+        self.log("Arming motors ...")
+        self.handler.send_service_request(CLI_ARM, data)
+        self.log("Motors armed!")
+
+    @_connected
+    def disarm(self):
+        '''
+        Disarms the drone.
+        '''
+        data = CommandBool.Request()
+        data.value = False
+        self.log("Disarming motors ...")
+        self.handler.send_service_request(CLI_ARM, data)
+        self.log("Motors disarmed!")
+
+    @_connected
+    def set_mode(self, mode : str):
+        '''
+        Sets the mode of the drone.
+        '''
+        data = SetMode.Request()
+        data.custom_mode = mode.upper()
+        self.log(f"Switching mode to {mode} ...")
+        self.handler.send_service_request(CLI_SET_MODE, data)
+        self.log(f"Mode switched to {mode}!")
+
+    @_armed_connected
+    def takeoff(self, altitude : float):
+        '''
+        Takes off the drone to the specified altitude.
+        '''
+        data = CommandTOL.Request()
+        data.altitude = float(altitude)
+        self.log("Taking off ...")
+        self.handler.send_service_request(CLI_TAKEOFF, data)
+        self.log("Drone is airborne!")
+
+    @_armed_connected
+    def land(self):
+        '''
+        Lands the drone.
+        '''
+        data = CommandTOL.Request()
+        self.log("Landing ...")
+        self.handler.send_service_request(CLI_LAND, data)
+        self.log("Drone is heading to the ground!")
+
+    @_connected
+    def set_home(self):
+        '''
+        Sets the home position of the drone to the drones current position.
+        '''
+        data = CommandHome.Request()
+        data.current_gps = True
+        self.log("Setting home position ...")
+        self.handler.send_service_request(CLI_SET_HOME, data)
+        self.log("Home position set!")
+
+    @_connected
+    def set_steam_rate(self, stream_id : int, rate : int, on_off : bool):
+        '''
+        Sets the stream rate of a specific stream.
+        '''
+        data = StreamRate.Request()
+        data.stream_id = stream_id
+        data.message_rate = rate
+        data.on_off = on_off
+        self.log(f"Setting stream rate for stream {stream_id} ...")
+        self.handler.send_service_request(CLI_SET_STREAM_RATE, data)
+        self.log(f"Stream rate set for stream {stream_id}!")
+
+    @_connected
+    def set_param(self, param : str, value : float | int):
+        '''
+        Sets a parameter on the drone.
+        '''
+        data = ParamSet.Request()
+        data.param_id = param
+        if isinstance(value, float):
+            data.value.integer = 0
+            data.value.real = value
+        elif isinstance(value, int):
+            data.value.integer = value
+            data.value.real = 0
+        else:
+            self.log(f"Invalid value type {value} for parameter {param}.")
+            return
+        self.log(f"Setting parameter {param} ...")
+        self.handler.send_service_request(CLI_SET_PARAM, data)
+        self.log(f"Parameter {param} set!")
+
 
 if __name__ == "__main__":
     handler = RCLPY_Handler("mavros_node")
     api = MAVROS_API(handler)
     api.connect()
-    for i in range(10):
-        print(api.get_battery())
+    api.set_mode("GUIDED")
+    api.arm()
+    api.takeoff(5)
+    for i in range(50):
+        print(api.get_global_pose())
+        print(api.armed, api.mode)
         time.sleep(0.5)
     time.sleep(5)
+    api.land()
     api.disconnect()
     print("Connection status: ", api.is_connected())
     print("Done!")
