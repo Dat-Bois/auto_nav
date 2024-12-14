@@ -5,6 +5,12 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.node import Node
 from topic_service import Publisher, Subscriber, Client
 
+class Euler:
+    def __init__(self, roll : float, pitch : float, yaw : float):
+        self.roll = roll
+        self.pitch = pitch
+        self.yaw = yaw
+
 class RCLPY_Handler:
     def __init__(self, node : str):
         rclpy.init()

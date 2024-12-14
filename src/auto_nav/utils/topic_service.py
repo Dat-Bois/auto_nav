@@ -3,6 +3,8 @@ import rclpy.client
 import rclpy.publisher
 import rclpy.subscription
 
+import time
+
 class ROS_Service:
     def __init__(self, name : str, class_type, usage_type : str):
         self.__name = name
@@ -50,7 +52,11 @@ class Subscriber(ROS_Service):
         self.__data = None
         return data
 
-    def get_latest_data(self):
+    def get_latest_data(self, blocking=False):
+        if blocking:
+            while self.__data is None:
+                time.sleep(0.05)
+                pass
         return self.__data
 
 class Client(ROS_Service):

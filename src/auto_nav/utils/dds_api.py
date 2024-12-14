@@ -2,7 +2,7 @@
 # This file is an interface allowing for control with ArduPilot through ROS2 DDS.
 # Written by: Eesh Vij (evij@uci.edu)
 
-# DOES NOT WORK! NEEDS TO BE SOLVED!
+# DOES NOT WORK! NEEDS TO BE FIXED!
 
 import math
 import rclpy
