@@ -1,12 +1,16 @@
 import rclpy
 from rclpy import qos
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.node import Node
-from .topic_service import Publisher, Subscriber, Client
+from topic_service import Publisher, Subscriber, Client
 
 class RCLPY_Handler:
     def __init__(self, node : str):
         rclpy.init()
         self.node = Node(node)
+        self.executor = MultiThreadedExecutor()
+        self.executor.add_node(self.node)
         self.connected = False
         self.create_QoS()
 
@@ -46,10 +50,11 @@ class RCLPY_Handler:
             self.log_error(f"ERROR: {e}")
 
     def create_topic_subscriber(self, topic: Subscriber, function=None):
+        callback_group = MutuallyExclusiveCallbackGroup()
         try:
             if function == None:
                 function = topic.set_data
-            topic.set_subscription(self.node.create_subscription(topic.get_type(), topic.get_name(), function, self.qos))
+            topic.set_subscription(self.node.create_subscription(topic.get_type(), topic.get_name(), function, self.qos, callback_group=callback_group))
         except Exception as e:
             self.log_error("Failed to subscribe to topic: " + topic.get_name())
             self.log_error(f"ERROR: {e}")

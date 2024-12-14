@@ -2,6 +2,7 @@
 # This file is an interface allowing for control with ArduPilot through ROS2 DDS.
 # Written by: Eesh Vij (evij@uci.edu)
 
+# DOES NOT WORK! NEEDS TO BE SOLVED!
 
 import math
 import rclpy
@@ -12,7 +13,7 @@ import threading
 from geopy import distance
 from geopy import point
 
-from .rclpy_handler import RCLPY_Handler, Publisher, Subscriber, Client
+from rclpy_handler import RCLPY_Handler, Publisher, Subscriber, Client
 
 # Message types
 # Ardupilot messages
@@ -59,7 +60,7 @@ CLI_MODE = Client("/ap/mode_switch", ModeSwitch)
 
 #---------------------------------#
 
-class drone_API:
+class DDS_API:
 
     def __init__(self, handler: RCLPY_Handler):
         self.handler = handler
@@ -79,7 +80,7 @@ class drone_API:
         return self.handler.disconnect()
     
     def is_connected(self):
-        return handler.connected
+        return self.handler.connected
 
     def log(self, msg : str):
         self.handler.log(msg)
@@ -243,7 +244,7 @@ class drone_API:
     
 if __name__ == "__main__":
     handler = RCLPY_Handler("drone_API")
-    drone = drone_API(handler)
+    drone = DDS_API(handler)
     drone.connect()
     time.sleep(2)
     drone.switch_mode("loiter")
