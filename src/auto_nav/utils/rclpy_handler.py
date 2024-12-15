@@ -4,12 +4,36 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.node import Node
 from topic_service import Publisher, Subscriber, Client
-
+from geometry_msgs.msg import Quaternion as ROS_Quaternion
 class Euler:
     def __init__(self, roll : float, pitch : float, yaw : float):
         self.roll = roll
         self.pitch = pitch
         self.yaw = yaw
+
+class Quaternion:
+    def __init__(self, x : float | ROS_Quaternion, y : float = None, z : float = None, w : float = None):
+        if y == None:
+            self.x = x.x
+            self.y = x.y
+            self.z = x.z
+            self.w = x.w
+        else:
+            self.x = x
+            self.y = y
+            self.z = z
+            self.w = w
+
+    def to_ros(self):
+        quat = ROS_Quaternion()
+        quat.x = float(self.x)
+        quat.y = float(self.y)
+        quat.z = float(self.z)
+        quat.w = float(self.w)
+        return quat
+    
+    def to_tuple(self) -> tuple:
+        return (self.x, self.y, self.z, self.w)
 
 class RCLPY_Handler:
     def __init__(self, node : str):
@@ -89,4 +113,4 @@ class RCLPY_Handler:
             self.log_error(f"ERROR: {e}")
 
     def get_time(self):
-        return self.node.get_clock().now()
+        return self.node.get_clock().now().to_msg()

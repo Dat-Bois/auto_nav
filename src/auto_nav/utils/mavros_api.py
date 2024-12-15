@@ -6,21 +6,27 @@ from threading import Thread, Lock
 
 from typing import List, Tuple
 
-from rclpy_handler import RCLPY_Handler, Publisher, Subscriber, Client, Euler
+import rclpy.parameter
+from rclpy_handler import RCLPY_Handler, Publisher, Subscriber, Client, Euler, Quaternion
 
 # MAVROS messages
 # Generic services
 from mavros_msgs.srv import CommandBool, CommandHome, CommandTOL, SetMode, StreamRate, ParamSet
 # Control messages
-from mavros_msgs.msg import State, OverrideRCIn, RCIn, ManualControl, Thrust
+from mavros_msgs.msg import State, OverrideRCIn, RCIn, Thrust
 # Waypoint messages
 from mavros_msgs.msg import WaypointReached, WaypointList
 from mavros_msgs.srv import WaypointSetCurrent, WaypointPull, WaypointPush, WaypointClear
 
+# MAVROS Parameter messages
+from rcl_interfaces.srv import SetParameters, GetParameters
+from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
+
 # Geographic messages
 from geographic_msgs.msg import GeoPoseStamped, GeoPointStamped
 # Geometry messages
-from geometry_msgs.msg import PoseStamped, Twist, TwistStamped, Point, Quaternion, Vector3
+from geometry_msgs.msg import PoseStamped, Twist, TwistStamped, Point, Vector3
+from geometry_msgs.msg import Quaternion as ROS_Quaternion
 # Sensor messages
 from sensor_msgs.msg import BatteryState, Imu, NavSatFix
 # Built-in messages
@@ -35,9 +41,8 @@ from rosgraph_msgs.msg import Clock
 PUB_RCOVERRIDE = Publisher("/mavros/rc/override", OverrideRCIn)
 PUB_GLOBAL_SETPOINT = Publisher("/mavros/setpoint_position/global", GeoPoseStamped)
 PUB_LOCAL_SETPOINT = Publisher("/mavros/setpoint_position/local", PoseStamped)
-PUB_SET_ANGLE_VEL = Publisher("/mavros/setpoint_attitude/cmd_vel", TwistStamped)
 PUB_SET_VEL = Publisher("/mavros/setpoint_velocity/cmd_vel_unstamped", Twist)
-PUB_SET_ATT = Publisher("/mavros/setpoint_attitude/attitude", PoseStamped)
+PUB_SET_ANGLE_VEL = Publisher("/mavros/setpoint_attitude/cmd_vel", TwistStamped)
 PUB_SET_THRUST = Publisher("/mavros/setpoint_attitude/thrust", Thrust)
 
 # Subscriber topics
@@ -72,7 +77,7 @@ class MAVROS_API:
         self.init_topics()
         self.conn_thread = Thread(target=self._connect, daemon=True)
         self.armed = False
-        self.mode = "loiter"
+        self.mode = None
 
     def connect(self):
         self.handler.log("Starting connection thread ...")
@@ -156,10 +161,11 @@ class MAVROS_API:
         alt : Float64 = SUB_REL_ALT.get_latest_data(blocking=True)
         return (data.latitude, data.longitude, data.altitude, alt.data)
 
-    def quaternion_to_euler(self, x, y, z, w) -> Euler:
+    def quaternion_to_euler(self, quat : Quaternion) -> Euler:
         '''
         Converts a quaternion to Euler angles.
         '''
+        x, y, z, w = quat.to_tuple()
         t0 = +2.0 * (w * x + y * z)
         t1 = +1.0 - 2.0 * (x * x + y * y)
         roll_x = math.degrees(math.atan2(t0, t1))
@@ -188,12 +194,12 @@ class MAVROS_API:
         '''
         data : PoseStamped = SUB_POSE.get_latest_data(blocking=True)
         point : Point = data.pose.position
-        quat : Quaternion = data.pose.orientation
-        euler = self.quaternion_to_euler(quat.x, quat.y, quat.z, quat.w)
+        quat : ROS_Quaternion = data.pose.orientation
+        euler = self.quaternion_to_euler(Quaternion(quat))
         if as_type == "point":
             return point
         elif as_type == "quat":
-            return quat
+            return Quaternion(quat)
         elif as_type == "euler":
             return euler
         elif as_type == None:
@@ -265,8 +271,9 @@ class MAVROS_API:
         data = CommandBool.Request()
         data.value = True
         self.log("Arming motors ...")
-        self.handler.send_service_request(CLI_ARM, data)
-        while not self.armed: pass
+        while not self.armed:
+            self.handler.send_service_request(CLI_ARM, data)
+            time.sleep(1)
         self.log("Motors armed!")
 
     @_connected
@@ -288,8 +295,9 @@ class MAVROS_API:
         data = SetMode.Request()
         data.custom_mode = mode.upper()
         self.log(f"Switching mode to {mode} ...")
-        res = self.handler.send_service_request(CLI_SET_MODE, data)
-        time.sleep(1)
+        while self.mode != mode.upper():
+            res = self.handler.send_service_request(CLI_SET_MODE, data)
+            time.sleep(0.5)
         if res: self.log(f"Mode switched to {mode}!")
 
     @_armed_connected
@@ -304,10 +312,13 @@ class MAVROS_API:
         self.log("Drone is airborne!")
 
     @_armed_connected
-    def land(self):
+    def land(self, *, at_home : bool = False):
         '''
         Lands the drone.
         '''
+        if at_home:
+            self.set_mode("rtl")
+            return
         data = CommandTOL.Request()
         self.log("Landing ...")
         self.handler.send_service_request(CLI_LAND, data)
@@ -340,7 +351,7 @@ class MAVROS_API:
     @_connected
     def set_param(self, param : str, value : float | int):
         '''
-        Sets a parameter on the drone.
+        Sets an Ardupilot parameter on the drone.
         '''
         data = ParamSet.Request()
         data.param_id = param
@@ -356,6 +367,23 @@ class MAVROS_API:
         self.log(f"Setting parameter {param} ...")
         self.handler.send_service_request(CLI_SET_PARAM, data)
         self.log(f"Parameter {param} set!")
+
+    @_connected
+    def set_mavros_param(self, topic : str, param : str, value : bool):
+        '''
+        Sets a ROS parameter on the drone.
+        ONLY SUPPORTS BOOL VALUES FOR NOW.
+        '''
+        if not isinstance(value, bool):
+            self.log("Invalid value type. Only bool values are supported for setting ROS params.")
+            return
+        PARAM_TOPIC = Client(topic, SetParameters)
+        self.handler.create_service_client(PARAM_TOPIC)
+        data = SetParameters.Request()
+        data.parameters = [Parameter(name=param, value=ParameterValue(type=ParameterType.PARAMETER_BOOL, bool_value=value))]
+        self.log(f"Setting ROS parameter {param} ...")
+        self.handler.send_service_request(PARAM_TOPIC, data)
+        self.log(f"ROS parameter {param} set!")
 
     '''
     PUBLISHER BASED FUNCTIONS
@@ -404,67 +432,55 @@ class MAVROS_API:
         '''
         data = GeoPoseStamped()
         data.header.stamp = self.handler.get_time()
-        data.pose.position.latitude = lat
-        data.pose.position.longitude = lon
-        data.pose.orientation = self.euler_to_quat(Euler(0, 0, yaw)) if yaw != None else self.get_local_pose(as_type="quat")
-        data.pose.position.altitude = alt if alt != None else self.get_global_pose()[2]
+        data.pose.position.latitude = float(lat)
+        data.pose.position.longitude = float(lon)
+        data.pose.orientation = self.euler_to_quat(Euler(0, 0, -yaw)).to_ros() if yaw != None else self.get_local_pose(as_type="quat").to_ros()
+        data.pose.position.altitude = alt if alt != None else self.get_global_pose()[2] #TODO: CONVERT ELLIPSOID TO ASML
         self.handler.publish_topic(PUB_GLOBAL_SETPOINT, data)
 
     @_armed_connected
     def set_local_pose(self, x : float, y : float, z : float, yaw : float = None):
         '''
         Sets the local pose of the drone.
+        WORKS
         '''
         data = PoseStamped()
         data.header.stamp = self.handler.get_time()
-        data.pose.position.x = x
-        data.pose.position.y = y
-        data.pose.position.z = z
-        data.pose.orientation = self.euler_to_quat(Euler(0, 0, yaw)) if yaw != None else self.get_local_pose(as_type="quat")
+        data.pose.position.x = float(x)
+        data.pose.position.y = float(y)
+        data.pose.position.z = float(z)
+        data.pose.orientation = self.euler_to_quat(Euler(0, 0, -yaw)).to_ros() if yaw != None else self.get_local_pose(as_type="quat").to_ros()
         self.handler.publish_topic(PUB_LOCAL_SETPOINT, data)
 
     @_armed_connected
     def set_velocity(self, x : float, y : float, z : float):
         '''
         Sets the linear velocity of the drone.
+        WORKS
         '''
         data = Twist()
-        data.linear = Vector3(x, y, z)
+        data.linear.x = float(x)
+        data.linear.y = float(y)
+        data.linear.z = float(z)
         self.handler.publish_topic(PUB_SET_VEL, data)
 
     @_armed_connected
-    def set_angle_velocity(self, roll : float, pitch : float, yaw : float):
+    def set_angle_velocity(self, roll : float, pitch : float, yaw : float, thrust : float = 0.5):
         '''
         Sets the angular velocity of the drone.
+        WORKS
         '''
         data = TwistStamped()
-        data.twist.angular = Vector3(roll, pitch, yaw)
+        data2 = Thrust()
+        stamp : Time = self.handler.get_time()
+        data.header.stamp = stamp
+        data2.header.stamp = stamp
+        data.twist.angular.x = float(pitch)
+        data.twist.angular.y = float(roll)
+        data.twist.angular.z = float(yaw)
+        data2.thrust = 0.5
         self.handler.publish_topic(PUB_SET_ANGLE_VEL, data)
-
-    @_armed_connected
-    def set_attitude(self, orientation : Quaternion | Euler):
-        '''
-        Sets the attitude of the drone.
-        '''
-        data = PoseStamped()
-        if isinstance(orientation, Quaternion):
-            data.pose.orientation = orientation
-        elif isinstance(orientation, Euler):
-            data.pose.orientation = self.euler_to_quat(orientation)
-        else:
-            self.log("Invalid orientation type.")
-            return
-        self.handler.publish_topic(PUB_SET_ATT, data)
-
-    @_armed_connected
-    def set_thrust(self, thrust : float):
-        '''
-        Sets the thrust of the drone.
-        '''
-        data = Thrust()
-        thrust = min(max(thrust, 0), 1)
-        data.thrust = float(thrust)
-        self.handler.publish_topic(PUB_SET_THRUST, data)
+        self.handler.publish_topic(PUB_SET_THRUST, data2)
 
 if __name__ == "__main__":
     handler = RCLPY_Handler("mavros_node")
@@ -473,14 +489,19 @@ if __name__ == "__main__":
     api.set_mode("GUIDED")
     api.arm()
     api.takeoff(5)
-    time.sleep(10)
+    while api.get_local_pose(as_type="point").z < 4.9: pass
     api.log("Setting thrust ...")
+    pose = api.get_global_pose()
+    print(pose)
     for i in range(50):
-        api.set_thrust(1)
-        # print(api.armed, api.mode)
-        time.sleep(0.5)
+        # api.set_velocity(0,0.5,0)
+        # api.set_global_pose(pose[0], pose[1], alt=pose[2]+2, yaw=20)
+        api.set_angle_velocity(0, 2, 0)
+        print(api.get_local_pose(as_type="point"))
+        print(api.get_heading())
+        time.sleep(0.2)
     # time.sleep(5)
-    api.land()
+    api.land(at_home=True)
     api.disconnect()
     print("Connection status: ", api.is_connected())
     print("Done!")
