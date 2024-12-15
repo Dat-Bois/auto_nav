@@ -40,10 +40,10 @@ class RCLPY_Handler:
 
     def disconnect(self):
         if self.connected:
+            self.connected = False
             self.log("Shutting down rclpy ...")
             self.node.destroy_node()
             rclpy.shutdown()
-            self.connected = False
 
     def create_topic_publisher(self, topic: Publisher):
         topic.set_publisher(self.node.create_publisher(topic.get_type(), topic.get_name(), 10))
@@ -87,3 +87,6 @@ class RCLPY_Handler:
         except Exception as e:
             self.log_error("Failed to request service: " + srv)
             self.log_error(f"ERROR: {e}")
+
+    def get_time(self):
+        return self.node.get_clock().now()

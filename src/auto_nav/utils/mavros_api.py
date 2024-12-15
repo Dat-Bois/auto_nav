@@ -32,10 +32,11 @@ from rosgraph_msgs.msg import Clock
 
 # Publisher topics
 # Control topics
-PUB_OVERRIDE_RC = Publisher("/mavros/rc/override", OverrideRCIn)
+PUB_RCOVERRIDE = Publisher("/mavros/rc/override", OverrideRCIn)
 PUB_GLOBAL_SETPOINT = Publisher("/mavros/setpoint_position/global", GeoPoseStamped)
 PUB_LOCAL_SETPOINT = Publisher("/mavros/setpoint_position/local", PoseStamped)
-PUB_SET_VEL = Publisher("/mavros/setpoint_attitude/cmd_vel", TwistStamped)
+PUB_SET_ANGLE_VEL = Publisher("/mavros/setpoint_attitude/cmd_vel", TwistStamped)
+PUB_SET_VEL = Publisher("/mavros/setpoint_velocity/cmd_vel_unstamped", Twist)
 PUB_SET_ATT = Publisher("/mavros/setpoint_attitude/attitude", PoseStamped)
 PUB_SET_THRUST = Publisher("/mavros/setpoint_attitude/thrust", Thrust)
 
@@ -114,7 +115,9 @@ class MAVROS_API:
         for cli in clients:
             self.handler.create_service_client(cli)
 
-    # GETTERS
+    '''
+    ############## - GETTERS - ##############
+    '''
     
     def _connected(func):
         def wrapper(self : 'MAVROS_API', *args, **kwargs):
@@ -129,6 +132,10 @@ class MAVROS_API:
         '''
         Updates the state of the drone.
         '''
+        if self.armed == True and msg.armed == False:
+            self.log("Drone disarmed externally!")
+            self.log('Exiting ...')
+            self.disconnect()
         self.armed = msg.armed
         self.mode = msg.mode
     
@@ -226,13 +233,21 @@ class MAVROS_API:
         '''
         return SUB_RC_IN.get_latest_data()
 
-    # SETTERS ----------------------------------------------
+    '''
+    ############## - SETTERS - ##############
+    '''
 
+    '''
+    SERVICE BASED FUNCTIONS
+    '''
 
     def _armed_connected(func):
         def wrapper(self : 'MAVROS_API', *args, **kwargs):
+            if not self.is_connected():
+                self.log("Not connected to MAVROS! Exiting function ...")
+                return
             timeout = 10
-            while not self.is_connected() or not self.armed:
+            while not self.armed:
                 self.log('Waiting for drone to be armed ...')
                 time.sleep(1)
                 timeout -= 1
@@ -251,6 +266,7 @@ class MAVROS_API:
         data.value = True
         self.log("Arming motors ...")
         self.handler.send_service_request(CLI_ARM, data)
+        while not self.armed: pass
         self.log("Motors armed!")
 
     @_connected
@@ -272,8 +288,9 @@ class MAVROS_API:
         data = SetMode.Request()
         data.custom_mode = mode.upper()
         self.log(f"Switching mode to {mode} ...")
-        self.handler.send_service_request(CLI_SET_MODE, data)
-        self.log(f"Mode switched to {mode}!")
+        res = self.handler.send_service_request(CLI_SET_MODE, data)
+        time.sleep(1)
+        if res: self.log(f"Mode switched to {mode}!")
 
     @_armed_connected
     def takeoff(self, altitude : float):
@@ -340,6 +357,114 @@ class MAVROS_API:
         self.handler.send_service_request(CLI_SET_PARAM, data)
         self.log(f"Parameter {param} set!")
 
+    '''
+    PUBLISHER BASED FUNCTIONS
+    '''
+
+    @_armed_connected
+    def set_rc(self, channels : List[int]):
+        '''
+        Sets the RC channels of the drone.
+        There are 18 channels total.
+        Can be set between 1200 and 1800.
+        To use the actual RC controller, set the channel to 0.
+        To ignore changing a channel, set it to 65535.
+        '''
+        data = OverrideRCIn()
+        data.channels = channels
+        self.handler.publish_topic(PUB_RCOVERRIDE, data)
+
+    def euler_to_quat(self, euler : Euler) -> Quaternion:
+        '''
+        Converts Euler angles to a quaternion.
+        '''
+        roll = math.radians(euler.roll)
+        pitch = math.radians(euler.pitch)
+        yaw = math.radians(euler.yaw)
+
+        cy = math.cos(yaw * 0.5)
+        sy = math.sin(yaw * 0.5)
+        cp = math.cos(pitch * 0.5)
+        sp = math.sin(pitch * 0.5)
+        cr = math.cos(roll * 0.5)
+        sr = math.sin(roll * 0.5)
+
+        w = cy * cp * cr + sy * sp * sr
+        x = cy * cp * sr - sy * sp * cr
+        y = sy * cp * sr + cy * sp * cr
+        z = sy * cp * cr - cy * sp * sr
+
+        return Quaternion(x, y, z, w)
+
+    @_armed_connected
+    def set_global_pose(self, lat : float, lon : float, alt : float = None, yaw : float = None):
+        '''
+        Sets the global pose of the drone.
+        Logic not finalized.
+        '''
+        data = GeoPoseStamped()
+        data.header.stamp = self.handler.get_time()
+        data.pose.position.latitude = lat
+        data.pose.position.longitude = lon
+        data.pose.orientation = self.euler_to_quat(Euler(0, 0, yaw)) if yaw != None else self.get_local_pose(as_type="quat")
+        data.pose.position.altitude = alt if alt != None else self.get_global_pose()[2]
+        self.handler.publish_topic(PUB_GLOBAL_SETPOINT, data)
+
+    @_armed_connected
+    def set_local_pose(self, x : float, y : float, z : float, yaw : float = None):
+        '''
+        Sets the local pose of the drone.
+        '''
+        data = PoseStamped()
+        data.header.stamp = self.handler.get_time()
+        data.pose.position.x = x
+        data.pose.position.y = y
+        data.pose.position.z = z
+        data.pose.orientation = self.euler_to_quat(Euler(0, 0, yaw)) if yaw != None else self.get_local_pose(as_type="quat")
+        self.handler.publish_topic(PUB_LOCAL_SETPOINT, data)
+
+    @_armed_connected
+    def set_velocity(self, x : float, y : float, z : float):
+        '''
+        Sets the linear velocity of the drone.
+        '''
+        data = Twist()
+        data.linear = Vector3(x, y, z)
+        self.handler.publish_topic(PUB_SET_VEL, data)
+
+    @_armed_connected
+    def set_angle_velocity(self, roll : float, pitch : float, yaw : float):
+        '''
+        Sets the angular velocity of the drone.
+        '''
+        data = TwistStamped()
+        data.twist.angular = Vector3(roll, pitch, yaw)
+        self.handler.publish_topic(PUB_SET_ANGLE_VEL, data)
+
+    @_armed_connected
+    def set_attitude(self, orientation : Quaternion | Euler):
+        '''
+        Sets the attitude of the drone.
+        '''
+        data = PoseStamped()
+        if isinstance(orientation, Quaternion):
+            data.pose.orientation = orientation
+        elif isinstance(orientation, Euler):
+            data.pose.orientation = self.euler_to_quat(orientation)
+        else:
+            self.log("Invalid orientation type.")
+            return
+        self.handler.publish_topic(PUB_SET_ATT, data)
+
+    @_armed_connected
+    def set_thrust(self, thrust : float):
+        '''
+        Sets the thrust of the drone.
+        '''
+        data = Thrust()
+        thrust = min(max(thrust, 0), 1)
+        data.thrust = float(thrust)
+        self.handler.publish_topic(PUB_SET_THRUST, data)
 
 if __name__ == "__main__":
     handler = RCLPY_Handler("mavros_node")
@@ -348,11 +473,13 @@ if __name__ == "__main__":
     api.set_mode("GUIDED")
     api.arm()
     api.takeoff(5)
+    time.sleep(10)
+    api.log("Setting thrust ...")
     for i in range(50):
-        print(api.get_global_pose())
-        print(api.armed, api.mode)
+        api.set_thrust(1)
+        # print(api.armed, api.mode)
         time.sleep(0.5)
-    time.sleep(5)
+    # time.sleep(5)
     api.land()
     api.disconnect()
     print("Connection status: ", api.is_connected())
