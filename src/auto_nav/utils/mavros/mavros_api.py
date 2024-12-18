@@ -18,6 +18,9 @@ from mavros_msgs.msg import State, OverrideRCIn, RCIn, Thrust
 from mavros_msgs.msg import WaypointReached, WaypointList
 from mavros_msgs.srv import WaypointSetCurrent, WaypointPull, WaypointPush, WaypointClear
 
+# Gimbal messages
+from mavros_msgs.msg import GimbalManagerSetPitchyaw
+
 # MAVROS Parameter messages
 from rcl_interfaces.srv import SetParameters, GetParameters
 from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
@@ -44,6 +47,9 @@ PUB_LOCAL_SETPOINT = Publisher("/mavros/setpoint_position/local", PoseStamped)
 PUB_SET_VEL = Publisher("/mavros/setpoint_velocity/cmd_vel_unstamped", Twist)
 PUB_SET_ANGLE_VEL = Publisher("/mavros/setpoint_attitude/cmd_vel", TwistStamped)
 PUB_SET_THRUST = Publisher("/mavros/setpoint_attitude/thrust", Thrust)
+
+# Gimbal topics
+PUB_GIMBAL = Publisher("/mavros/gimbal_control/manager/set_pitchyaw", GimbalManagerSetPitchyaw)
 
 # Subscriber topics
 # State topics
@@ -482,26 +488,38 @@ class MAVROS_API:
         self.handler.publish_topic(PUB_SET_ANGLE_VEL, data)
         self.handler.publish_topic(PUB_SET_THRUST, data2)
 
+    @_connected
+    def set_gimbal(self, pitch : float, yaw : float):
+        '''
+        Sets the pitch and yaw of the gimbal.
+        '''
+        data = GimbalManagerSetPitchyaw()
+        data.pitch = float(pitch)
+        data.yaw = float(yaw)
+        self.handler.publish_topic(PUB_GIMBAL, data)
+
 if __name__ == "__main__":
     handler = RCLPY_Handler("mavros_node")
     api = MAVROS_API(handler)
     api.connect()
     api.set_mode("GUIDED")
-    api.arm()
-    api.takeoff(5)
-    while api.get_local_pose(as_type="point").z < 4.9: pass
-    api.log("Setting thrust ...")
-    pose = api.get_global_pose()
-    print(pose)
-    for i in range(50):
-        # api.set_velocity(0,0.5,0)
-        # api.set_global_pose(pose[0], pose[1], alt=pose[2]+2, yaw=20)
-        api.set_angle_velocity(0, 2, 0)
-        print(api.get_local_pose(as_type="point"))
-        print(api.get_heading())
-        time.sleep(0.2)
-    # time.sleep(5)
-    api.land(at_home=True)
+    api.set_gimbal(0, 0)
+    # api.arm()
+    # api.takeoff(5)
+    # while api.get_local_pose(as_type="point").z < 4.9: pass
+    # api.log("Setting thrust ...")
+    # pose = api.get_global_pose()
+    # print(pose)
+    # for i in range(50):
+    #     api.set_velocity(0,0.5,0)
+    #     api.set_angle_velocity(0, 0, 0.5)
+    #     # api.set_global_pose(pose[0], pose[1], alt=pose[2]+2, yaw=20)
+    #     # api.set_angle_velocity(0, 2, 0)
+    #     print(api.get_local_pose(as_type="point"))
+    #     print(api.get_heading())
+    #     time.sleep(0.2)
+    # # time.sleep(5)
+    # api.land(at_home=True)
     api.disconnect()
     print("Connection status: ", api.is_connected())
     print("Done!")
