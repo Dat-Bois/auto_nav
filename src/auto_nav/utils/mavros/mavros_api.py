@@ -18,9 +18,6 @@ from mavros_msgs.msg import State, OverrideRCIn, RCIn, Thrust
 from mavros_msgs.msg import WaypointReached, WaypointList
 from mavros_msgs.srv import WaypointSetCurrent, WaypointPull, WaypointPush, WaypointClear
 
-# Gimbal messages
-from mavros_msgs.msg import GimbalDeviceSetAttitude
-
 # MAVROS Parameter messages
 from rcl_interfaces.srv import SetParameters, GetParameters
 from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
@@ -88,6 +85,7 @@ class MAVROS_API:
         # When using simulation, set this to True
         self.gz = True
         self.gimbal_channels = [0,0,0]
+        self.set_gimbal()
 
     def connect(self):
         self.handler.log("Starting connection thread ...")
@@ -109,6 +107,7 @@ class MAVROS_API:
         self.init_publishers()
         self.init_subscribers()
         self.init_clients()
+        self.init_timers()
 
     def init_publishers(self):
         publishers = [v for k, v in globals().items() if isinstance(v, Publisher)]
@@ -331,17 +330,19 @@ class MAVROS_API:
         self.log("Drone is airborne!")
 
     @_armed_connected
-    def land(self, *, at_home : bool = False):
+    def land(self, *, at_home : bool = False, blocking : bool = False):
         '''
         Lands the drone.
         '''
         if at_home:
             self.set_mode("rtl")
-            return
-        data = CommandTOL.Request()
-        self.log("Landing ...")
-        self.handler.send_service_request(CLI_LAND, data)
-        self.log("Drone is heading to the ground!")
+        else:
+            data = CommandTOL.Request()
+            self.log("Landing ...")
+            self.handler.send_service_request(CLI_LAND, data)
+            self.log("Drone is heading to the ground!")
+        if blocking:
+            while self.get_local_pose(as_type="point").z > 0.1: pass
 
     @_connected
     def set_home(self):
@@ -513,9 +514,10 @@ class MAVROS_API:
             channels[5] = self.gimbal_channels[0]
             channels[6] = self.gimbal_channels[1]
             channels[7] = self.gimbal_channels[2]
-            self.set_rc(channels)
+            data = OverrideRCIn()
+            data.channels = channels
+            self.handler.publish_topic(PUB_RCOVERRIDE, data)
 
-    @_connected
     def set_gimbal(self, *, pitch : float = None, yaw : float = None, roll : float = None, orientation : Quaternion | Euler = None):
         '''
         Sets the pitch and yaw of the gimbal.
@@ -549,6 +551,7 @@ if __name__ == "__main__":
     api.connect()
     api.set_mode("GUIDED")
     api.arm()
+    api.set_gimbal(orientation=Euler(0, -10, 0))
     api.takeoff(5)
     while api.get_local_pose(as_type="point").z < 4.9: pass
     api.log("Setting thrust ...")
@@ -556,12 +559,11 @@ if __name__ == "__main__":
     print(pose)
     for i in range(50):
         api.set_velocity(0,0.5,0)
-        api.set_gimbal(orientation=Euler(0, -10, 0))
         # api.set_global_pose(pose[0], pose[1], alt=pose[2]+2, yaw=20)
         # api.set_angle_velocity(0, 2, 0)
         time.sleep(0.2)
-    # time.sleep(5)
-    api.land(at_home=True)
+    time.sleep(5)
+    api.land(at_home=True, blocking=True)
     api.disconnect()
     print("Connection status: ", api.is_connected())
     print("Done!")

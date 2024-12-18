@@ -77,16 +77,16 @@ class WallTimer(ROS_Service):
     def __init__(self, name: str, period: float):
         super().__init__(name, None, "timer")
         self.__period = period
-        self.__func = self._dummy_func
+        self.__func = self.__dummy_func
 
-    def _dummy_func(self):
+    def __dummy_func(self):
         pass
+
+    def run(self):
+        self.__func()
 
     def set_func(self, func):
         self.__func = func
-
-    def get_func(self):
-        return self.__func
 
     def get_period(self):
         return self.__period

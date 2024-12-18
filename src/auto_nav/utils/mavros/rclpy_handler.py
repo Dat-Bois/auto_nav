@@ -73,7 +73,7 @@ class RCLPY_Handler:
         topic.set_publisher(self.node.create_publisher(topic.get_type(), topic.get_name(), 10))
 
     def create_timer(self, timer: WallTimer):
-        timer = self.node.create_timer(timer.get_period(), timer.get_func(), callback_group=MutuallyExclusiveCallbackGroup())
+        timer = self.node.create_timer(timer.get_period(), timer.run, callback_group=MutuallyExclusiveCallbackGroup())
         
     def publish_topic(self, topic: Publisher, data):
         try:
