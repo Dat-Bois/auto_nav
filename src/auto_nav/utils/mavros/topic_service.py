@@ -5,6 +5,8 @@ import rclpy.subscription
 
 import time
 
+import rclpy.timer
+
 class ROS_Service:
     def __init__(self, name : str, class_type, usage_type : str):
         self.__name = name
@@ -69,3 +71,28 @@ class Client(ROS_Service):
 
     def get_client(self) -> rclpy.client.Client:
         return self.__client
+    
+class WallTimer(ROS_Service):
+    
+    def __init__(self, name: str, period: float):
+        super().__init__(name, None, "timer")
+        self.__period = period
+        self.__func = self._dummy_func
+
+    def _dummy_func(self):
+        pass
+
+    def set_func(self, func):
+        self.__func = func
+
+    def get_func(self):
+        return self.__func
+
+    def get_period(self):
+        return self.__period
+
+    def set_timer(self, timer : rclpy.timer.Timer):
+        self.__timer = timer
+
+    def get_timer(self) -> rclpy.timer.Timer:
+        return self.__timer

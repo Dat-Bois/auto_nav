@@ -3,7 +3,7 @@ from rclpy import qos
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.node import Node
-from topic_service import Publisher, Subscriber, Client
+from topic_service import Publisher, Subscriber, Client, WallTimer
 from geometry_msgs.msg import Quaternion as ROS_Quaternion
 class Euler:
     def __init__(self, roll : float, pitch : float, yaw : float):
@@ -71,6 +71,9 @@ class RCLPY_Handler:
 
     def create_topic_publisher(self, topic: Publisher):
         topic.set_publisher(self.node.create_publisher(topic.get_type(), topic.get_name(), 10))
+
+    def create_timer(self, timer: WallTimer):
+        timer = self.node.create_timer(timer.get_period(), timer.get_func(), callback_group=MutuallyExclusiveCallbackGroup())
         
     def publish_topic(self, topic: Publisher, data):
         try:

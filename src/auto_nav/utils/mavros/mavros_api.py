@@ -7,7 +7,7 @@ from threading import Thread, Lock
 from typing import List, Tuple
 
 import rclpy.parameter
-from rclpy_handler import RCLPY_Handler, Publisher, Subscriber, Client, Euler, Quaternion
+from rclpy_handler import RCLPY_Handler, Publisher, Subscriber, WallTimer, Client, Euler, Quaternion
 
 # MAVROS messages
 # Generic services
@@ -19,7 +19,7 @@ from mavros_msgs.msg import WaypointReached, WaypointList
 from mavros_msgs.srv import WaypointSetCurrent, WaypointPull, WaypointPush, WaypointClear
 
 # Gimbal messages
-from mavros_msgs.msg import GimbalManagerSetPitchyaw
+from mavros_msgs.msg import GimbalDeviceSetAttitude
 
 # MAVROS Parameter messages
 from rcl_interfaces.srv import SetParameters, GetParameters
@@ -48,9 +48,6 @@ PUB_SET_VEL = Publisher("/mavros/setpoint_velocity/cmd_vel_unstamped", Twist)
 PUB_SET_ANGLE_VEL = Publisher("/mavros/setpoint_attitude/cmd_vel", TwistStamped)
 PUB_SET_THRUST = Publisher("/mavros/setpoint_attitude/thrust", Thrust)
 
-# Gimbal topics
-PUB_GIMBAL = Publisher("/mavros/gimbal_control/manager/set_pitchyaw", GimbalManagerSetPitchyaw)
-
 # Subscriber topics
 # State topics
 SUB_STATE = Subscriber("/mavros/state", State)
@@ -65,6 +62,9 @@ SUB_HDG = Subscriber("/mavros/global_position/compass_hdg", Float64)
 SUB_VEL = Subscriber("/mavros/global_position/gp_vel", TwistStamped)
 # RC topics
 SUB_RC_IN = Subscriber("/mavros/rc/in", RCIn)
+
+# Timers
+TIMER_GIMBAL = WallTimer("/mavros/rc/override", 0.1)
 
 # Client topics
 CLI_ARM = Client("/mavros/cmd/arming", CommandBool)
@@ -84,6 +84,10 @@ class MAVROS_API:
         self.conn_thread = Thread(target=self._connect, daemon=True)
         self.armed = False
         self.mode = None
+        
+        # When using simulation, set this to True
+        self.gz = True
+        self.gimbal_channels = [0,0,0]
 
     def connect(self):
         self.handler.log("Starting connection thread ...")
@@ -117,9 +121,18 @@ class MAVROS_API:
             self.handler.create_topic_subscriber(sub)
         self.edit_subscribers()
 
+    def init_timers(self):
+        timers = [v for k, v in globals().items() if isinstance(v, WallTimer)]
+        for timer in timers:
+            self.handler.create_timer(timer)
+        self.edit_timers()
+
     def edit_subscribers(self):
         self.handler.edit_topic_subscriber(SUB_STATE, self.update_state)
         pass
+
+    def edit_timers(self):
+        TIMER_GIMBAL.set_func(self._set_gimbal_callback)
 
     def init_clients(self):
         clients = [v for k, v in globals().items() if isinstance(v, Client)]
@@ -489,37 +502,66 @@ class MAVROS_API:
         self.handler.publish_topic(PUB_SET_THRUST, data2)
 
     @_connected
-    def set_gimbal(self, pitch : float, yaw : float):
+    def _set_gimbal_callback(self):
+        '''
+        Index 5: Roll
+        Index 6: Pitch
+        Index 7: Yaw
+        '''
+        if self.gz:
+            channels = [65535] * 18
+            channels[5] = self.gimbal_channels[0]
+            channels[6] = self.gimbal_channels[1]
+            channels[7] = self.gimbal_channels[2]
+            self.set_rc(channels)
+
+    @_connected
+    def set_gimbal(self, *, pitch : float = None, yaw : float = None, roll : float = None, orientation : Quaternion | Euler = None):
         '''
         Sets the pitch and yaw of the gimbal.
+        Pitch range: -135 to 45
+        Yaw range: -160 to 160
+        Roll range: -30 to 30
+        WORKS
         '''
-        data = GimbalManagerSetPitchyaw()
-        data.pitch = float(pitch)
-        data.yaw = float(yaw)
-        self.handler.publish_topic(PUB_GIMBAL, data)
+        if pitch == None and yaw == None and roll == None and orientation == None:
+            pitch, yaw, roll = 0, 0, 0
+        if orientation != None:
+            if isinstance(orientation, Euler):
+                pitch, yaw, roll = orientation.pitch, orientation.yaw, orientation.roll
+            elif isinstance(orientation, Quaternion):
+                euler = self.quaternion_to_euler(orientation)
+                pitch, yaw, roll = euler.pitch, euler.yaw, euler.roll
+            else:
+                self.log("Invalid orientation type. Must be Euler or Quaternion.")
+                return
+        if roll != None:
+            self.gimbal_channels[0] = 1100 + int((yaw + 30) / 60 * 800) # roll
+        if pitch != None:
+            pitch_range = 45 - (-135)
+            self.gimbal_channels[1] = 1100 + int((pitch + 135) / pitch_range * 800) # pitch
+        if yaw != None:
+            self.gimbal_channels[2] = 1100 + int((yaw + 160) / 320 * 800) # yaw
 
 if __name__ == "__main__":
     handler = RCLPY_Handler("mavros_node")
     api = MAVROS_API(handler)
     api.connect()
     api.set_mode("GUIDED")
-    api.set_gimbal(0, 0)
-    # api.arm()
-    # api.takeoff(5)
-    # while api.get_local_pose(as_type="point").z < 4.9: pass
-    # api.log("Setting thrust ...")
-    # pose = api.get_global_pose()
-    # print(pose)
-    # for i in range(50):
-    #     api.set_velocity(0,0.5,0)
-    #     api.set_angle_velocity(0, 0, 0.5)
-    #     # api.set_global_pose(pose[0], pose[1], alt=pose[2]+2, yaw=20)
-    #     # api.set_angle_velocity(0, 2, 0)
-    #     print(api.get_local_pose(as_type="point"))
-    #     print(api.get_heading())
-    #     time.sleep(0.2)
-    # # time.sleep(5)
-    # api.land(at_home=True)
+    api.arm()
+    api.takeoff(5)
+    while api.get_local_pose(as_type="point").z < 4.9: pass
+    api.log("Setting thrust ...")
+    pose = api.get_global_pose()
+    print(pose)
+    for i in range(50):
+        api.set_velocity(0,0.5,0)
+        api.set_gimbal(orientation=Euler(0, -10, 0))
+        # api.set_global_pose(pose[0], pose[1], alt=pose[2]+2, yaw=20)
+        # api.set_angle_velocity(0, 2, 0)
+        time.sleep(0.2)
+    # time.sleep(5)
+    api.land(at_home=True)
     api.disconnect()
     print("Connection status: ", api.is_connected())
     print("Done!")
