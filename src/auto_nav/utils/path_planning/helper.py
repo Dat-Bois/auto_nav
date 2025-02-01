@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 
 from pathlib import Path
 
-
 def load_map(map_path: Path):
     return np.loadtxt(map_path, delimiter=',')
 
@@ -40,5 +39,3 @@ if __name__ == '__main__':
     map = load_map(map_path)
     map = [to_ecef(point[0], point[1], 100) for point in map]
     print(three_way_angle(map[0], map[1], map[2]))
-
-    
