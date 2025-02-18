@@ -25,7 +25,7 @@ constraints = [x[0] == x0, v[0] == v0, a[0] == a0]
 # Step 4: Add motion constraints
 for t in range(T - 1):
     constraints += [
-        x[t+1] == x[t] + v[t] * dt + 0.5 * a[t] * dt**2 + (1/6) * j[t] * dt**3,
+        x[t+1] == x[t] + v[t] * dt + 0.5 * a[t] * dt**2 + (1/6) * j[t] * dt**3, # pos = pos + v*dt + 0.5*a*dt^2 + (1/6)*j*dt^3
         v[t+1] == v[t] + a[t] * dt + 0.5 * j[t] * dt**2,
         a[t+1] == a[t] + j[t] * dt
     ]
@@ -45,8 +45,8 @@ for i, t_idx in enumerate(waypoint_times):
 
 # Step 6: Define cost function (velocity tracking, acceleration, jerk)
 v_desired = np.ones(T) * 3.0  # Target velocity of 1 m/s
-cost = cp.sum_squares(v - v_desired)  # Minimize velocity tracking error
-cost += cp.sum_squares(a)  # Minimize acceleration effort
+# cost = cp.sum_squares(v - v_desired)  # Minimize velocity tracking error
+cost = cp.sum_squares(a)  # Minimize acceleration effort
 cost += cp.sum_squares(j)  # Minimize jerk effort
 
 # Step 7: Solve the optimization problem
