@@ -1,4 +1,6 @@
 import os
+import warnings
+warnings.simplefilter("ignore", UserWarning)
 import numpy as np
 import cvxpy as cp
 import matplotlib.pyplot as plt
@@ -35,8 +37,8 @@ class Profile:
 
 class BaseSolver:
    def __init__(self): 
-      self.current_position = None
-      self.current_velocity = None
+      self.current_position : np.ndarray = None
+      self.current_velocity : np.ndarray = None
       self.current_orientation = None
       self.waypoints = None
 
@@ -46,7 +48,8 @@ class BaseSolver:
       self.max_yaw_rate = None
       self.max_yaw_acceleration = None
       self.tolerance = 0.2
-      pass
+
+      self.constraints = {}
 
    def _parse_waypoints(self, waypoints: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
       if not isinstance(waypoints, np.ndarray): waypoints = np.array(waypoints)
@@ -57,37 +60,48 @@ class BaseSolver:
       z_points = waypoints[:, 2]
       return x_points, y_points, z_points
    
-   def set_hard_constraints(self, *,  max_velocity: float = None, 
-                                 max_acceleration: float = None,
-                                 max_jerk: float = None,
-                                 max_yaw_rate: float = None,
-                                 max_yaw_acceleration: float = None,
-                                 max_tolerance: float = 0.2
-                                 ):
+   def set_hard_constraints(self, **kwargs):
       '''
       Set hard constraints for the solver.
+      Available constraints:
+         - max_velocity : float
+         - max_acceleration : float
+         - max_jerk : float
+         - max_yaw_rate : float
+         - max_yaw_acceleration : float
+         - max_tolerance : float (meters) default 0.2
       '''
-      self.max_velocity = max_velocity
-      self.max_acceleration = max_acceleration
-      self.max_jerk = max_jerk
-      self.max_yaw_rate = max_yaw_rate
-      self.max_yaw_acceleration = max_yaw_acceleration
-      self.tolerance = max_tolerance # meters
+      self.max_velocity = kwargs.get('max_velocity', None)
+      self.max_acceleration = kwargs.get('max_acceleration', None)
+      self.max_jerk = kwargs.get('max_jerk', None)
+      self.max_yaw_rate = kwargs.get('max_yaw_rate', None)
+      self.max_yaw_acceleration = kwargs.get('max_yaw_acceleration', None)
+      self.tolerance = kwargs.get("max_tolerance", 0.2) # meters
+      self.constraints = kwargs
+
+   def get_hard_constraints(self):
+      return self.constraints
 
    def _solve(sel, **kwargs): pass
 
    def solve(self,      current_position: np.ndarray | None,
                         waypoints: np.ndarray,
-                        current_velocity: np.ndarray = np.zeros(3),
+                        current_velocity: np.ndarray | None = None,
                         current_orientation: float = 0.0,
                         **kwargs
-                        ) -> np.ndarray:
+                        ) -> np.ndarray | None:
       '''
       Assumes current position is the first waypoint. Depending on the solver not all metrics may be used.
       If the solver requires additional parameters, they can be passed as kwargs.
       '''
+      if current_velocity is None:
+         self.current_velocity = np.zeros(3)
+      # Ensure that if the current velocity is greater than the max velocity, the max velocity is adjusted (only the greater values)
+      if self.max_velocity is not None:
+         for i in range(3):
+            if abs(current_velocity[i]) > abs(self.max_velocity[i]):
+               self.max_velocity[i] = current_velocity[i]
       self.current_position = current_position
-      self.current_velocity = current_velocity
       self.current_orientation = current_orientation
       self.waypoints = waypoints
       return self._solve(**kwargs)
@@ -107,14 +121,21 @@ class BaseSolver:
       snap = np.gradient(jerk, T, axis=1)
       return Profile(velocity, acceleration, jerk, snap)
    
-   def temporal_scale(self, trajectory: np.ndarray) -> np.ndarray:
+   def temporal_scale(self, trajectory: np.ndarray, max_time = None) -> np.ndarray:
       '''
       Scales the trajectory in time to meet the constraints.
       '''
+      if trajectory is None:
+         return None
       # Get the time from the trajectory
       time = trajectory[:, 3]
       # Iteratively scale time until all constraints are met
-      for i in range(100):
+      for i in range(1000):
+         if max_time is not None and time[-1] > max_time:
+            multiplier = max_time / time[-1]
+            time = time * multiplier
+            trajectory[:, 3] = time
+            break
          # Replace the time in the trajectory
          trajectory[:, 3] = time
          # Check constraints
@@ -146,7 +167,7 @@ class BaseSolver:
          ax.scatter(waypoint[0], waypoint[1], waypoint[2], c='g', marker='x')
 
       if profile is not None:
-         fig, axs = plt.subplots(3, 3, figsize=(10, 6))
+         fig1, axs = plt.subplots(3, 3, figsize=(10, 6))
          time = trajectory[:, 3]
          axs[0, 0].plot(time, profile.velocity[0], label='Velocity X')
          axs[0, 0].set_ylabel('Velocity X')
@@ -176,7 +197,9 @@ class BaseSolver:
          plt.show()
       except:
          print("Unable to show plot. Saving instead...")
-         plt.savefig('trajectory.png')
+         fig.savefig('logs/trajectory.png')
+         if profile is not None:
+            fig1.savefig('logs/profile.png')
     
 class CubicSolver(BaseSolver):
    def __init__(self):
@@ -265,6 +288,7 @@ class QPSolver(BaseSolver):
       #--- Define initial conditions ---#
       x0, y0, z0 = x_points[0], y_points[0], z_points[0]
       constraints = [X[:, 0] == np.array([x0, y0, z0])]
+      constraints += [V[:, 0] == self.current_velocity]
       #--- Add motion constraints ---#
       for t in range(T - 1):
          constraints += [
@@ -288,13 +312,17 @@ class QPSolver(BaseSolver):
       for i, t_idx in enumerate(waypoint_times):
          constraints.append(X[:, int(t_idx)] >= np.array([x_points[i] - tolerance, y_points[i] - tolerance, z_points[i] - tolerance]))
          constraints.append(X[:, int(t_idx)] <= np.array([x_points[i] + tolerance, y_points[i] + tolerance, z_points[i] + tolerance]))
-      #--- Define cost function (velocity tracking, acceleration, jerk) ---#
+      #--- Define cost function (acceleration, jerk, snap) ---#
       cost = cp.sum_squares(A)
       cost += cp.sum_squares(J)
-      cost += cp.sum_squares(S)*10 # penalize snap more
+      cost += cp.sum_squares(S)*100 # penalize snap more
       #--- Solve the optimization problem ---#
       problem = cp.Problem(cp.Minimize(cost), constraints)
-      problem.solve(solver=cp.OSQP, verbose=False, max_iter=20000)
+      try:
+         problem.solve(solver=cp.OSQP, verbose=False, max_iter=20000)
+      except cp.SolverError as e:
+         print("Failed to solve")
+         return None
       #--- Extract optimized trajectory ---#
       if X.value is None:
          print("Failed to solve")
@@ -310,7 +338,7 @@ if __name__  == "__main__":
    waypoints = np.array([  [0, 0, 0], 
                            [1, 2, 0],
                            [2, 0, 2], 
-                           [3, -2, 2], 
+                           [3, -2.2, 2], 
                            [1.5, 0, 2], 
                            [5, 1, 1],
                            [6, 0, 0], 
@@ -319,10 +347,11 @@ if __name__  == "__main__":
                            [9, 0, 0]
                            ])
    solver.set_hard_constraints(max_tolerance=0.2)
-   trajectory = solver.solve(None, waypoints, smoothing=0)
+   trajectory = solver.solve(None, waypoints)
    profile = solver.profile(trajectory)
    solver.visualize(trajectory, waypoints, profile)
-   solver.set_hard_constraints(max_velocity=3)
+
+   solver.set_hard_constraints(max_jerk=3)
    solver.temporal_scale(trajectory)
    profile = solver.profile(trajectory)
    solver.visualize(trajectory, waypoints, profile)

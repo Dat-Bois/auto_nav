@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/auto_nav"]
+
+[project]
+name = "auto_nav"
+version = "0.1.0"
+description = "Custom drone path-planning and navigation library"
+readme = "README.md"
+authors = [{ name = "Eesh Vij", email = "evij@uci.edu" }]
+
+requires-python = ">=3.10, <=3.11"
+dependencies = [
+    "numpy",
+    "scipy",
+    "tqdm",
+    "geographiclib",
+    "rclpy"
+]
+
+[project.optional-dependencies]
+ros = [
+    "mavros_msgs",
+    "geographic_msgs",
+    "rcl_interfaces",
+    "sensor_msgs",
+    "geometry_msgs",
+    "builtin_interfaces",
+    "std_msgs",
+    "rosgraph_msgs",
+]

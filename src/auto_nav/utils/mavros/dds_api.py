@@ -10,10 +10,7 @@ import time
 import errno
 import threading
 
-from geopy import distance
-from geopy import point
-
-from rclpy_handler import RCLPY_Handler, Publisher, Subscriber, Client
+from .rclpy_handler import RCLPY_Handler, Publisher, Subscriber, Client
 
 # Message types
 # Ardupilot messages

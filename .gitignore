@@ -1,3 +1,6 @@
 *.DS_Store
 *.code-workspace
 *__pycache__/
+*.egg-info/
+*.egg
+src/auto_nav/utils/path_planning/logs/*

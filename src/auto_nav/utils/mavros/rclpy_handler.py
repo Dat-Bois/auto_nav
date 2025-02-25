@@ -3,7 +3,7 @@ from rclpy import qos
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.node import Node
-from topic_service import Publisher, Subscriber, Client, WallTimer
+from .topic_service import Publisher, Subscriber, Client, WallTimer
 from geometry_msgs.msg import Quaternion as ROS_Quaternion
 class Euler:
     def __init__(self, roll : float, pitch : float, yaw : float):
