@@ -17,6 +17,9 @@ dependencies = [
     "numpy",
     "scipy",
     "tqdm",
+    "cvxpy",
+    "casadi",
+    "matplotlib",
     "geographiclib",
     "rclpy"
 ]

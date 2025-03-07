@@ -3,6 +3,7 @@ import warnings
 warnings.simplefilter("ignore", UserWarning)
 import numpy as np
 import cvxpy as cp
+import casadi as ca
 import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline, LSQUnivariateSpline, UnivariateSpline
 
@@ -331,10 +332,105 @@ class QPSolver(BaseSolver):
       trajectory = np.insert(trajectory, 3, np.linspace(0, T*dt, T), axis=1)
       return trajectory
 
+class CasSolver(BaseSolver):
+   def __init__(self):
+      super().__init__()
+   
+   def _solve(self, **kwargs) -> np.ndarray:
+      '''
+      Formats the problem into a constraint problem and solves it using ipopt.
+      Minimizes snap and attempts yaw.
+      '''
+      x_points, y_points, z_points = self._parse_waypoints(self.waypoints)
+      # Use euclidean dist to parameterize the spline
+      euclidean_length = np.cumsum(np.sqrt(np.diff(x_points)**2 + np.diff(y_points)**2 + np.diff(z_points)**2))
+      euclidean_length = np.insert(euclidean_length, 0, 0)
+
+      #--- FORMULATE CONSTRAINT PROBLEM ---#
+      # Use max distance to approximate time based on 2 m/s avg speed
+      dt = 0.1
+      waypoint_times = np.rint((euclidean_length / 2) / dt).astype(int)
+      T = waypoint_times[-1] + 1
+      #--- Define optimization variables ---#
+      optimizer = ca.Opti()
+      X = optimizer.variable(3, T)  # Position
+      V = optimizer.variable(3, T)  # Velocity
+      A = optimizer.variable(3, T)  # Acceleration
+      J = optimizer.variable(3, T)  # Jerk
+      S = optimizer.variable(3, T)  # Snap
+      psi = optimizer.variable(T) # Yaw
+      psi_dot = optimizer.variable(T) # Yaw rate
+      psi_ddot = optimizer.variable(T) # Yaw acceleration
+      #--- Define initial conditions ---#
+      x0, y0, z0 = x_points[0], y_points[0], z_points[0]
+      optimizer.subject_to(X[:, 0] == np.array([x0, y0, z0]))
+      if(np.all(self.current_velocity == 0)):
+         self.current_velocity = np.array([1e-3, 0, 0])
+      optimizer.subject_to(V[:, 0] == self.current_velocity)
+      optimizer.subject_to(psi[0] == self.current_orientation)
+      #--- Add motion constraints ---#
+      for t in range(T - 1):
+         R_t = ca.vertcat(
+            ca.horzcat(ca.cos(psi[t]), -ca.sin(psi[t]), 0),
+            ca.horzcat(ca.sin(psi[t]), ca.cos(psi[t]), 0),
+            ca.horzcat(0, 0, 1)
+         )
+         optimizer.subject_to(X[:, t+1] == X[:, t] + R_t @ V[:, t] * dt + 0.5 * R_t @ A[:, t] * dt**2 + (1/6) * R_t @ J[:, t] * dt**3 + (1/24) * R_t @ S[:, t] * dt**4)
+         optimizer.subject_to(V[:, t+1] == V[:, t] + A[:, t] * dt + 0.5 * J[:, t] * dt**2 + (1/6) * S[:, t] * dt**3)
+         optimizer.subject_to(A[:, t+1] == A[:, t] + J[:, t] * dt + 0.5 * S[:, t] * dt**2)
+         optimizer.subject_to(J[:, t+1] == J[:, t] + S[:, t] * dt)
+
+         optimizer.subject_to(psi[t+1] == psi[t] + psi_dot[t] * dt + 0.5 * psi_ddot[t] * dt**2)
+         optimizer.subject_to(psi_dot[t+1] == psi_dot[t] + psi_ddot[t] * dt)
+      #--- Velocity and acceleration limits ---#
+      if self.max_velocity is not None:
+         optimizer.subject_to(ca.norm_2(V) <= self.max_velocity)
+      if self.max_acceleration is not None:
+         optimizer.subject_to(ca.norm_2(A) <= self.max_acceleration)             
+      if self.max_jerk is not None:
+         optimizer.subject_to(ca.norm_2(J) <= self.max_jerk)
+      #--- Define waypoints and tolerance ---#
+      tolerance = self.tolerance
+      for i, t_idx in enumerate(waypoint_times):
+         optimizer.subject_to(X[:, int(t_idx)] >= np.array([x_points[i] - tolerance, y_points[i] - tolerance, z_points[i] - tolerance]))
+         optimizer.subject_to(X[:, int(t_idx)] <= np.array([x_points[i] + tolerance, y_points[i] + tolerance, z_points[i] + tolerance]))
+      #--- Define cost function (acceleration, jerk, snap) ---#
+      cost = ca.sumsqr(A)
+      cost += ca.sumsqr(J)
+      cost += ca.sumsqr(S)
+      #--- Yaw cost ---#
+      eps = 1e-6
+      heading_angle = ca.atan2(V[1, :] + eps, V[0, :] + eps)
+      cost += ca.sumsqr(psi - ca.transpose(heading_angle)) * 10
+      cost+= ca.sumsqr(psi_dot)
+      cost+= ca.sumsqr(psi_ddot)
+      #--- Solve the optimization problem ---#
+      optimizer.minimize(cost)
+      opts = {'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes'}
+      optimizer.solver('ipopt', opts)
+      solution : ca.OptiSol = None
+      try:
+         solution = optimizer.solve()
+      except:
+         print("Failed to solve")
+         return None
+      #--- Extract optimized trajectory ---#
+      if solution.value(X) is None:
+         print("Failed to solve")
+         return None
+      trajectory = solution.value(X)
+      trajectory = trajectory.T
+      yaw = solution.value(psi)
+      yaw = yaw.T
+      trajectory = np.insert(trajectory, 3, np.linspace(0, T*dt, T), axis=1)
+      # insert yaw as the last column
+      trajectory = np.insert(trajectory, 4, yaw, axis=1)
+      return trajectory
+
 
       
 if __name__  == "__main__":
-   solver = QPSolver()
+   solver = CasSolver()
    waypoints = np.array([  [0, 0, 0], 
                            [1, 2, 0],
                            [2, 0, 2], 
@@ -346,12 +442,57 @@ if __name__  == "__main__":
                            [8, 0, 0],
                            [9, 0, 0]
                            ])
+#    waypoints = np.array([[  1.21      ,  10.24      ,   1.35],
+#  [  2.92606891,  12.44012771,   1.35],
+#  [  4.37393109,  13.81987229,   1.35],
+#  [  7.74597775,  11.99999738,   1.35],
+#  [ 12.57402225,  10.70000262,   1.35],
+#  [ 14.11419013,  12.93208394,   1.35],
+#  [ 16.47548592,  16.16074963,   1.35],
+#  [ 16.47548592,  16.16074963,   1.45],
+#  [ 17.25158047,  16.0631713 ,   1.75],
+#  [ 17.73321315,  15.47721697,   2.05],
+#  [ 17.94227549,  14.69529186,   2.35],
+#  [ 17.83353107,  13.84701844,   2.65],
+#  [ 17.40271384,  13.06103983,   2.95],
+#  [ 16.69042814,  12.45735231,   3.25],
+#  [ 15.77806617,  12.133396  ,   3.55],
+#  [ 14.77793725,  12.15121548,   3.85],
+#  [ 13.81902815,  12.52850073,   4.15],
+#  [ 14.11419013,  12.93208394,   4.05],
+#  [ 16.18032395,  15.75716642,   4.05],
+#  [ 18.18032395,  15.75716642,   4.05],
+#  [ 18.77499031,  15.88005632,   4.05],
+#  [ 18.80500969,  19.87994368,   4.05],
+#  [ 18.80500969,  19.87994368,   1.35],
+#  [ 18.78249515,  16.88002816,   1.35],
+#  [ 16.7706479 ,  16.56433285,   1.35],
+#  [ 14.4093521 ,  13.33566715,   1.35],
+#  [ 14.81902815,  12.52850073,   1.35],
+#  [ 16.04999235,  11.98547524,   1.45],
+#  [ 16.80048596,  12.20805355,   1.75],
+#  [ 17.45686885,  12.62974244,   2.05],
+#  [ 17.95170916,  13.22275585,   2.35],
+#  [ 18.22362757,  13.92954066,   2.65],
+#  [ 18.23162321,  14.66396083,   2.95],
+#  [ 17.96893962,  15.31912966,   3.25],
+#  [ 17.473598  ,  15.78155123,   3.55],
+#  [ 16.83295695,  15.9500776 ,   3.85],
+#  [ 16.18032395,  15.75716642,   4.15],
+#  [ 16.18032395,  15.75716642,   4.05],
+#  [ 14.4093521 ,  13.33566715,   4.05],
+#  [ 12.0912178 ,  10.83000209,   1.35],
+#  [  9.1943911 ,  11.60999895,   1.35],
+#  [  8.2287822 ,  10.86999791,   1.35],
+#  [  1.84017226,   9.40531929,   1.35],
+#  [  1.21      ,  10.24      ,   1.  ]])
+   # waypoints = np.delete(waypoints, 3, axis=1)
    solver.set_hard_constraints(max_tolerance=0.2)
    trajectory = solver.solve(None, waypoints)
    profile = solver.profile(trajectory)
    solver.visualize(trajectory, waypoints, profile)
 
-   solver.set_hard_constraints(max_jerk=3)
-   solver.temporal_scale(trajectory)
-   profile = solver.profile(trajectory)
-   solver.visualize(trajectory, waypoints, profile)
+   # solver.set_hard_constraints(max_jerk=3)
+   # solver.temporal_scale(trajectory)
+   # profile = solver.profile(trajectory)
+   # solver.visualize(trajectory, waypoints, profile)
