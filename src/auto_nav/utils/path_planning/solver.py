@@ -30,11 +30,14 @@ A solver should take in the following inputs:
 '''
 
 class Profile:
-   def __init__(self, velocity: np.ndarray, acceleration: np.ndarray, jerk: np.ndarray, snap: np.ndarray):
+   def __init__(self, velocity: np.ndarray, acceleration: np.ndarray, jerk: np.ndarray, snap: np.ndarray, psi: np.ndarray = None, psi_dot: np.ndarray = None, psi_ddot: np.ndarray = None):
       self.velocity = velocity
       self.acceleration = acceleration
       self.jerk = jerk
       self.snap = snap
+      self.psi = psi
+      self.psi_dot = psi_dot
+      self.psi_ddot = psi_ddot
 
 class BaseSolver:
    def __init__(self): 
@@ -59,6 +62,8 @@ class BaseSolver:
       x_points = waypoints[:, 0]
       y_points = waypoints[:, 1]
       z_points = waypoints[:, 2]
+      if waypoints.shape[1] == 4:
+         return x_points, y_points, z_points, waypoints[:, 3] # return yaw as well
       return x_points, y_points, z_points
    
    def set_hard_constraints(self, **kwargs):
@@ -116,15 +121,24 @@ class BaseSolver:
          return None
       X = trajectory[:, :3].T
       T = trajectory[:, 3]
-      velocity = np.gradient(X, T, axis=1)
+      if trajectory.shape[1] > 4:
+         velocity = trajectory[:, 5:8].T
+      else:
+         velocity = np.gradient(X, T, axis=1)
       acceleration = np.gradient(velocity, T, axis=1)
       jerk = np.gradient(acceleration, T, axis=1)
       snap = np.gradient(jerk, T, axis=1)
+      if trajectory.shape[1] > 4:
+         yaw = trajectory[:, 4]
+         yaw_dot = np.gradient(yaw, T)
+         yaw_ddot = np.gradient(yaw_dot, T)
+         return Profile(velocity, acceleration, jerk, snap, yaw, yaw_dot, yaw_ddot)
       return Profile(velocity, acceleration, jerk, snap)
    
    def temporal_scale(self, trajectory: np.ndarray, max_time = None) -> np.ndarray:
       '''
       Scales the trajectory in time to meet the constraints.
+      DOES NOT WORK FOR CASADI SOLVER----
       '''
       if trajectory is None:
          return None
@@ -168,7 +182,7 @@ class BaseSolver:
          ax.scatter(waypoint[0], waypoint[1], waypoint[2], c='g', marker='x')
 
       if profile is not None:
-         fig1, axs = plt.subplots(3, 3, figsize=(10, 6))
+         fig1, axs = plt.subplots(3, 3+(isinstance(profile.psi, np.ndarray)), figsize=(10, 6))
          time = trajectory[:, 3]
          axs[0, 0].plot(time, profile.velocity[0], label='Velocity X')
          axs[0, 0].set_ylabel('Velocity X')
@@ -188,6 +202,13 @@ class BaseSolver:
          axs[2, 1].set_ylabel('Jerk Y')
          axs[2, 2].plot(time, profile.jerk[2], label='Jerk Z')
          axs[2, 2].set_ylabel('Jerk Z')
+         if isinstance(profile.psi, np.ndarray):
+            axs[0, 3].plot(time, profile.psi, label='Yaw')
+            axs[0, 3].set_ylabel('Yaw')
+            axs[1, 3].plot(time, profile.psi_dot, label='Yaw Rate')
+            axs[1, 3].set_ylabel('Yaw Rate')
+            axs[2, 3].plot(time, profile.psi_ddot, label='Yaw Acceleration')
+            axs[2, 3].set_ylabel('Yaw Acceleration')
          for ax in axs.flat:
             ax.set_xlabel('Time')
             ax.legend()
@@ -341,7 +362,11 @@ class CasSolver(BaseSolver):
       Formats the problem into a constraint problem and solves it using ipopt.
       Minimizes snap and attempts yaw.
       '''
-      x_points, y_points, z_points = self._parse_waypoints(self.waypoints)
+      points = self._parse_waypoints(self.waypoints)
+      if(len(points) == 4):
+         x_points, y_points, z_points, yaw_points = points
+      else:
+         x_points, y_points, z_points = points
       # Use euclidean dist to parameterize the spline
       euclidean_length = np.cumsum(np.sqrt(np.diff(x_points)**2 + np.diff(y_points)**2 + np.diff(z_points)**2))
       euclidean_length = np.insert(euclidean_length, 0, 0)
@@ -349,7 +374,7 @@ class CasSolver(BaseSolver):
       #--- FORMULATE CONSTRAINT PROBLEM ---#
       # Use max distance to approximate time based on 2 m/s avg speed
       dt = 0.1
-      waypoint_times = np.rint((euclidean_length / 2) / dt).astype(int)
+      waypoint_times = np.rint((euclidean_length / kwargs.get("desired_velocity", 2)) / dt).astype(int)
       T = waypoint_times[-1] + 1
       #--- Define optimization variables ---#
       optimizer = ca.Opti()
@@ -401,9 +426,9 @@ class CasSolver(BaseSolver):
       #--- Yaw cost ---#
       eps = 1e-6
       heading_angle = ca.atan2(V[1, :] + eps, V[0, :] + eps)
-      cost += ca.sumsqr(psi - ca.transpose(heading_angle)) * 10
-      cost+= ca.sumsqr(psi_dot)
-      cost+= ca.sumsqr(psi_ddot)
+      cost += ca.sumsqr(psi - ca.transpose(heading_angle))
+      cost += ca.sumsqr(psi_dot)
+      cost += ca.sumsqr(psi_ddot)
       #--- Solve the optimization problem ---#
       optimizer.minimize(cost)
       opts = {'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes'}
@@ -420,72 +445,74 @@ class CasSolver(BaseSolver):
          return None
       trajectory = solution.value(X)
       trajectory = trajectory.T
+      velocity = solution.value(V)
+      velocity = velocity.T
       yaw = solution.value(psi)
       yaw = yaw.T
       trajectory = np.insert(trajectory, 3, np.linspace(0, T*dt, T), axis=1)
-      # insert yaw as the last column
       trajectory = np.insert(trajectory, 4, yaw, axis=1)
+      trajectory = np.concatenate((trajectory, velocity), axis=1)
       return trajectory
 
 
       
 if __name__  == "__main__":
    solver = CasSolver()
-   waypoints = np.array([  [0, 0, 0], 
-                           [1, 2, 0],
-                           [2, 0, 2], 
-                           [3, -2.2, 2], 
-                           [1.5, 0, 2], 
-                           [5, 1, 1],
-                           [6, 0, 0], 
-                           [7, 2, 0],
-                           [8, 0, 0],
-                           [9, 0, 0]
-                           ])
-#    waypoints = np.array([[  1.21      ,  10.24      ,   1.35],
-#  [  2.92606891,  12.44012771,   1.35],
-#  [  4.37393109,  13.81987229,   1.35],
-#  [  7.74597775,  11.99999738,   1.35],
-#  [ 12.57402225,  10.70000262,   1.35],
-#  [ 14.11419013,  12.93208394,   1.35],
-#  [ 16.47548592,  16.16074963,   1.35],
-#  [ 16.47548592,  16.16074963,   1.45],
-#  [ 17.25158047,  16.0631713 ,   1.75],
-#  [ 17.73321315,  15.47721697,   2.05],
-#  [ 17.94227549,  14.69529186,   2.35],
-#  [ 17.83353107,  13.84701844,   2.65],
-#  [ 17.40271384,  13.06103983,   2.95],
-#  [ 16.69042814,  12.45735231,   3.25],
-#  [ 15.77806617,  12.133396  ,   3.55],
-#  [ 14.77793725,  12.15121548,   3.85],
-#  [ 13.81902815,  12.52850073,   4.15],
-#  [ 14.11419013,  12.93208394,   4.05],
-#  [ 16.18032395,  15.75716642,   4.05],
-#  [ 18.18032395,  15.75716642,   4.05],
-#  [ 18.77499031,  15.88005632,   4.05],
-#  [ 18.80500969,  19.87994368,   4.05],
-#  [ 18.80500969,  19.87994368,   1.35],
-#  [ 18.78249515,  16.88002816,   1.35],
-#  [ 16.7706479 ,  16.56433285,   1.35],
-#  [ 14.4093521 ,  13.33566715,   1.35],
-#  [ 14.81902815,  12.52850073,   1.35],
-#  [ 16.04999235,  11.98547524,   1.45],
-#  [ 16.80048596,  12.20805355,   1.75],
-#  [ 17.45686885,  12.62974244,   2.05],
-#  [ 17.95170916,  13.22275585,   2.35],
-#  [ 18.22362757,  13.92954066,   2.65],
-#  [ 18.23162321,  14.66396083,   2.95],
-#  [ 17.96893962,  15.31912966,   3.25],
-#  [ 17.473598  ,  15.78155123,   3.55],
-#  [ 16.83295695,  15.9500776 ,   3.85],
-#  [ 16.18032395,  15.75716642,   4.15],
-#  [ 16.18032395,  15.75716642,   4.05],
-#  [ 14.4093521 ,  13.33566715,   4.05],
-#  [ 12.0912178 ,  10.83000209,   1.35],
-#  [  9.1943911 ,  11.60999895,   1.35],
-#  [  8.2287822 ,  10.86999791,   1.35],
-#  [  1.84017226,   9.40531929,   1.35],
-#  [  1.21      ,  10.24      ,   1.  ]])
+   # waypoints = np.array([  [0, 0, 0], 
+   #                         [1, 2, 0],
+   #                         [2, 0, 2], 
+   #                         [3, -2.2, 2], 
+   #                         [1.5, 0, 2], 
+   #                         [5, 1, 1],
+   #                         [6, 0, 0], 
+   #                         [7, 2, 0],
+   #                         [8, 0, 0],
+   #                         [9, 0, 0]
+   #                         ])
+   waypoints = np.array([[  1.21      ,  10.24      ,   1.35],
+ [  2.92606891,  12.44012771,   1.35],
+ [  4.37393109,  13.81987229,   1.35],
+ [  7.74597775,  11.99999738,   1.35],
+ [ 12.57402225,  10.70000262,   1.35],
+ [ 14.11419013,  12.93208394,   1.35],
+ [ 16.47548592,  16.16074963,   1.35],
+ [ 16.47548592,  16.16074963,   1.45],
+ [ 17.25158047,  16.0631713 ,   1.75],
+ [ 17.73321315,  15.47721697,   2.05],
+ [ 17.94227549,  14.69529186,   2.35],
+ [ 17.83353107,  13.84701844,   2.65],
+ [ 17.40271384,  13.06103983,   2.95],
+ [ 16.69042814,  12.45735231,   3.25],
+ [ 15.77806617,  12.133396  ,   3.55],
+ [ 14.77793725,  12.15121548,   3.85],
+ [ 13.81902815,  12.52850073,   4.15],
+ [ 14.11419013,  12.93208394,   4.05],
+ [ 16.18032395,  15.75716642,   4.05],
+ [ 18.18032395,  15.75716642,   4.05],
+ [ 18.77499031,  15.88005632,   4.05],
+ [ 18.80500969,  19.87994368,   4.05],
+ [ 18.80500969,  19.87994368,   1.35],
+ [ 18.78249515,  16.88002816,   1.35],
+ [ 16.7706479 ,  16.56433285,   1.35],
+ [ 14.4093521 ,  13.33566715,   1.35],
+ [ 14.81902815,  12.52850073,   1.35],
+ [ 16.04999235,  11.98547524,   1.45],
+ [ 16.80048596,  12.20805355,   1.75],
+ [ 17.45686885,  12.62974244,   2.05],
+ [ 17.95170916,  13.22275585,   2.35],
+ [ 18.22362757,  13.92954066,   2.65],
+ [ 18.23162321,  14.66396083,   2.95],
+ [ 17.96893962,  15.31912966,   3.25],
+ [ 17.473598  ,  15.78155123,   3.55],
+ [ 16.83295695,  15.9500776 ,   3.85],
+ [ 16.18032395,  15.75716642,   4.15],
+ [ 16.18032395,  15.75716642,   4.05],
+ [ 14.4093521 ,  13.33566715,   4.05],
+ [ 12.0912178 ,  10.83000209,   1.35],
+ [  9.1943911 ,  11.60999895,   1.35],
+ [  8.2287822 ,  10.86999791,   1.35],
+ [  1.84017226,   9.40531929,   1.35],
+ [  1.21      ,  10.24      ,   1.  ]])
    # waypoints = np.delete(waypoints, 3, axis=1)
    solver.set_hard_constraints(max_tolerance=0.2)
    trajectory = solver.solve(None, waypoints)
