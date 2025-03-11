@@ -145,6 +145,9 @@ class BaseSolver:
       '''
       if trajectory is None:
          return None
+      if trajectory.shape[1] > 4:
+         print("Temporal scaling not implemented for casadi solver.")
+         return trajectory
       # Get the time from the trajectory
       time = trajectory[:, 3]
       # Iteratively scale time until all constraints are met
@@ -405,7 +408,8 @@ class CasSolver(BaseSolver):
       if(np.all(self.current_velocity == 0)):
          self.current_velocity = np.array([1e-3, 0, 0])
       optimizer.subject_to(V[:, 0] == self.current_velocity)
-      optimizer.subject_to(psi[0] == yaw_points[0] * (np.pi/180))
+      if yaw_points is not None:
+         optimizer.subject_to(psi[0] == yaw_points[0] * (np.pi/180))
       #--- Add motion constraints ---#
       for t in range(T - 1):
          R_t = ca.vertcat(
@@ -478,28 +482,28 @@ class CasSolver(BaseSolver):
       
 if __name__  == "__main__":
    solver = CasSolver()
-   # waypoints = np.array([  [0, 0, 0], 
-   #                         [1, 2, 0],
-   #                         [2, 0, 2], 
-   #                         [3, -2.2, 2], 
-   #                         [1.5, 0, 2], 
-   #                         [5, 1, 1],
-   #                         [6, 0, 0], 
-   #                         [7, 2, 0],
-   #                         [8, 0, 0],
-   #                         [9, 0, 0]
-   #                         ])
-   waypoints = np.array([  [0, 0, 0, 90], 
-                           [1, 2, 0, 180],
-                           [2, 0, 2, -1], 
-                           [3, -2.2, 2, -1], 
-                           [1.5, 0, 2, -1], 
-                           [5, 1, 1, -1],
-                           [6, 0, 0, -1], 
-                           [7, 2, 0, -1],
-                           [8, 0, 0, -1],
-                           [9, 0, 0, -1]
+   waypoints = np.array([  [0, 0, 0], 
+                           [1, 2, 0],
+                           [2, 0, 2], 
+                           [3, -2.2, 2], 
+                           [1.5, 0, 2], 
+                           [5, 1, 1],
+                           [6, 0, 0], 
+                           [7, 2, 0],
+                           [8, 0, 0],
+                           [9, 0, 0]
                            ])
+   # waypoints = np.array([  [0, 0, 0, 90], 
+   #                         [1, 2, 0, 180],
+   #                         [2, 0, 2, -1], 
+   #                         [3, -2.2, 2, -1], 
+   #                         [1.5, 0, 2, -1], 
+   #                         [5, 1, 1, -1],
+   #                         [6, 0, 0, -1], 
+   #                         [7, 2, 0, -1],
+   #                         [8, 0, 0, -1],
+   #                         [9, 0, 0, -1]
+   #                         ])
    # waypoints = np.array([[  1.21      ,  10.24      ,   1.35      ,  -1      ],
    #     [  2.92606891,  12.44012771,   1.35      ,  43.62      ],
    #     [  4.37393109,  13.81987229,   1.35      , 345      ],
@@ -589,10 +593,13 @@ if __name__  == "__main__":
 #  [  1.84017226,   9.40531929,   1.35],
 #  [  1.21      ,  10.24      ,   1.  ]])
    # waypoints = np.delete(waypoints, 3, axis=1)
-   solver.set_hard_constraints(max_tolerance=0.2)
+   # solver.set_hard_constraints(max_tolerance=0.2)
+   solver.set_hard_constraints(velocity_max=2, acceleration_max=1, max_tolerance=0.2)
    trajectory = solver.solve(None, waypoints)
-   profile = solver.profile(trajectory)
-   solver.visualize(trajectory, waypoints, profile)
+   for i in trajectory:
+      print("Line:", i)
+   # profile = solver.profile(trajectory)
+   # solver.visualize(trajectory, waypoints, profile)
 
    # solver.set_hard_constraints(max_jerk=3)
    # solver.temporal_scale(trajectory)

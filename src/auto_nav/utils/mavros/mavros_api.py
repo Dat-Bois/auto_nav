@@ -250,6 +250,27 @@ class MAVROS_API:
         return data.data
     
     @_connected
+    def get_rheading(self) -> float:
+        '''
+        Returns the heading of the drone in radians.
+        '''
+        return math.radians(self.get_heading())
+    
+    @_connected
+    def get_lheading(self) -> float:
+        '''
+        Returns the local heading of the drone in degrees.
+        '''
+        return self.get_local_pose(as_type="euler").yaw
+    
+    @_connected
+    def get_rlheading(self) -> float:
+        '''
+        Returns the localheading of the drone in radians.
+        '''
+        return math.radians(self.get_lheading())
+
+    @_connected
     def get_rc_input(self) -> RCIn:
         '''
         Returns the RC input data.
@@ -319,7 +340,7 @@ class MAVROS_API:
         if res: self.log(f"Mode switched to {mode}!")
 
     @_armed_connected
-    def takeoff(self, altitude : float):
+    def _takeoff(self, altitude : float):
         '''
         Takes off the drone to the specified altitude.
         '''
@@ -328,6 +349,15 @@ class MAVROS_API:
         self.log("Taking off ...")
         self.handler.send_service_request(CLI_TAKEOFF, data)
         self.log("Drone is airborne!")
+
+    @_armed_connected
+    def takeoff(self, altitude : float, *, blocking : bool = False):
+        '''
+        Takes off the drone to the specified altitude.
+        '''
+        self._takeoff(altitude)
+        if blocking:
+            while self.get_local_pose(as_type="point").z < altitude - 0.1: pass
 
     @_armed_connected
     def land(self, *, at_home : bool = False, blocking : bool = False):
@@ -471,6 +501,29 @@ class MAVROS_API:
         data.pose.position.z = float(z)
         data.pose.orientation = self.euler_to_quat(Euler(0, 0, -yaw)).to_ros() if yaw != None else self.get_local_pose(as_type="quat").to_ros()
         self.handler.publish_topic(PUB_LOCAL_SETPOINT, data)
+
+    @_armed_connected
+    def _set_heading(self, yaw : float):
+        '''
+        Sets the heading of the drone.
+        '''
+        data = PoseStamped()
+        data.header.stamp = self.handler.get_time()
+        # data.pose.position = self.get_local_pose(as_type="point")
+        data.pose.orientation = self.euler_to_quat(Euler(0, 0, -yaw)).to_ros()
+        self.handler.publish_topic(PUB_LOCAL_SETPOINT, data)
+
+    @_armed_connected
+    def set_heading(self, yaw : float, *, blocking : bool = False):
+        '''
+        Sets the heading of the drone.
+        '''
+        self._set_heading(yaw)
+        rad = math.radians(yaw)
+        if blocking:
+            while self.get_rlheading() < rad - 0.1 or self.get_rlheading() > rad + 0.1: 
+                self.log(f"Current heading: {self.get_rlheading()} | Target heading: {rad}")
+                time.sleep(0.1)
 
     @_armed_connected
     def set_velocity(self, x : float, y : float, z : float):
