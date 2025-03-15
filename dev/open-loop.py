@@ -21,16 +21,16 @@ if __name__ == '__main__':
     api.log("Solving trajectory...")
     pose = api.get_local_pose()
 
-    waypoints = np.array([  [0, 0, 0], 
-                           [1, 2, 0],
-                           [2, 0, 2], 
-                           [3, -2.2, 2], 
-                           [1.5, 0, 2], 
-                           [5, 1, 1],
-                           [6, 0, 0], 
-                           [7, 2, 0],
-                           [8, 0, 0],
-                           [9, 0, 0]
+    waypoints = np.array([  [0, 0, 1], 
+                           [1, 2, 1],
+                           [2, 0, 3], 
+                           [3, -2.2, 3], 
+                           [1.5, 0, 3], 
+                           [5, 1, 2],
+                           [6, 0, 1], 
+                           [7, 2, 1],
+                           [8, 0, 1],
+                           [9, 0, 1]
                            ])
 
     solver = CasSolver()
@@ -50,18 +50,17 @@ if __name__ == '__main__':
     # velocity = np.gradient(X, T, axis=1)
     # traj = np.hstack((X.T, T.reshape(-1, 1), velocity.T))
     # print(traj.shape)
-    # api.log("Setting initial heading...")
-    # api.set_heading(traj[0][4], blocking=True)
+    api.log("Setting initial heading...")
+    api.set_heading(traj[0][4], blocking=True)
     api.log("Executing trajectory...")
-    # Traj: x y z t y vx vy vz
-    for i, step in enumerate(traj):
-        api.set_velocity(step[5], step[6], step[7])
-        api.set_heading(step[4])
-        time.sleep(traj[i+1][3] - step[3] if i < len(traj) - 1 else 0.1)
+    velocities = profile.get_velocity()
+    # x y z t yr
+    for i, step in enumerate(velocities):
+        api.set_velocity(step[0], step[1], step[2], step[4])
+        time.sleep(velocities[i+1][3] - step[3] if i < len(velocities) - 1 else 0.1)
 
     api.log("Finished...")
-    pose = api.get_local_pose(as_type='point')
-    api.set_local_pose(pose.x, pose.y, pose.z)
+    api.set_velocity(0, 0, 0, 0)
     time.sleep(10)
     api.land(at_home=True, blocking=True)
     api.disconnect()

@@ -509,7 +509,7 @@ class MAVROS_API:
         '''
         data = PoseStamped()
         data.header.stamp = self.handler.get_time()
-        # data.pose.position = self.get_local_pose(as_type="point")
+        data.pose.position = self.get_local_pose(as_type="point")
         data.pose.orientation = self.euler_to_quat(Euler(0, 0, -yaw)).to_ros()
         self.handler.publish_topic(PUB_LOCAL_SETPOINT, data)
 

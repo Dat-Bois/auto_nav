@@ -30,8 +30,11 @@ A solver should take in the following inputs:
 '''
 
 class Profile:
-   def __init__(self, velocity: np.ndarray, acceleration: np.ndarray, jerk: np.ndarray, snap: np.ndarray, psi: np.ndarray = None, psi_dot: np.ndarray = None, psi_ddot: np.ndarray = None):
+   def __init__(self, times: np.ndarray, velocity: np.ndarray, acceleration: np.ndarray, jerk: np.ndarray, snap: np.ndarray, 
+                psi: np.ndarray = None, psi_dot: np.ndarray = None, psi_ddot: np.ndarray = None, body_velocity: np.ndarray = None):
+      self.times = times
       self.velocity = velocity
+      self.body_velocity = body_velocity
       self.acceleration = acceleration
       self.jerk = jerk
       self.snap = snap
@@ -39,6 +42,17 @@ class Profile:
       self.psi_dot = psi_dot
       self.psi_ddot = psi_ddot
 
+   def get_velocity(self) -> np.ndarray:
+      '''
+      Returns the velocity profile as vx, vy, vz, t, yr
+      If there is no yaw rate, it will return vx, vy, vz, t
+      '''
+      velocity = self.velocity.T
+      velocity = np.insert(velocity, 3, self.times, axis=1)
+      if self.psi is not None:
+         velocity = np.insert(velocity, 4, self.psi, axis=1)
+      return velocity
+      
 class BaseSolver:
    def __init__(self): 
       self.current_position : np.ndarray = None
@@ -115,7 +129,7 @@ class BaseSolver:
       self.waypoints = waypoints
       return self._solve(**kwargs)
    
-   def profile(self, trajectory: np.ndarray) -> Profile:
+   def profile(self, trajectory: np.ndarray, *, use_body = False) -> Profile:
       '''
       Returns a profile object that contains the velocity, acceleration, jerk, and snap profiles.
       Trajectory should be in the format of x, y, z, t.
@@ -124,8 +138,11 @@ class BaseSolver:
          return None
       X = trajectory[:, :3].T
       T = trajectory[:, 3]
+      bv = None
       if trajectory.shape[1] > 4:
-         velocity = trajectory[:, 5:8].T
+         bv = trajectory[:, 5:8].T
+      if use_body and bv is not None:
+         velocity = bv
       else:
          velocity = np.gradient(X, T, axis=1)
       acceleration = np.gradient(velocity, T, axis=1)
@@ -135,8 +152,8 @@ class BaseSolver:
          yaw = trajectory[:, 4]
          yaw_dot = np.gradient(yaw, T)
          yaw_ddot = np.gradient(yaw_dot, T)
-         return Profile(velocity, acceleration, jerk, snap, yaw, yaw_dot, yaw_ddot)
-      return Profile(velocity, acceleration, jerk, snap)
+         return Profile(T, velocity, acceleration, jerk, snap, yaw, yaw_dot, yaw_ddot, bv)
+      return Profile(T, velocity, acceleration, jerk, snap)
    
    def temporal_scale(self, trajectory: np.ndarray, max_time = None) -> np.ndarray:
       '''
@@ -481,7 +498,6 @@ class CasSolver(BaseSolver):
 
       
 if __name__  == "__main__":
-   solver = CasSolver()
    waypoints = np.array([  [0, 0, 0], 
                            [1, 2, 0],
                            [2, 0, 2], 
@@ -593,12 +609,15 @@ if __name__  == "__main__":
 #  [  1.84017226,   9.40531929,   1.35],
 #  [  1.21      ,  10.24      ,   1.  ]])
    # waypoints = np.delete(waypoints, 3, axis=1)
+   solver = CasSolver()
    # solver.set_hard_constraints(max_tolerance=0.2)
    solver.set_hard_constraints(velocity_max=2, acceleration_max=1, max_tolerance=0.2)
    trajectory = solver.solve(None, waypoints)
-   for i in trajectory:
-      print("Line:", i)
-   # profile = solver.profile(trajectory)
+   # for i in trajectory:
+   #    print("Line:", i)
+   profile = solver.profile(trajectory)
+   print(profile.velocity[0:5])
+   print(profile.get_velocity()[0:5])
    # solver.visualize(trajectory, waypoints, profile)
 
    # solver.set_hard_constraints(max_jerk=3)
