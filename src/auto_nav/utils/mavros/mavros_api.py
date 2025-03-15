@@ -56,7 +56,7 @@ SUB_POSE = Subscriber("/mavros/local_position/pose", PoseStamped)
 # Orientation topics
 SUB_IMU = Subscriber("/mavros/imu/data", Imu)
 SUB_HDG = Subscriber("/mavros/global_position/compass_hdg", Float64)
-SUB_VEL = Subscriber("/mavros/global_position/gp_vel", TwistStamped)
+SUB_VEL = Subscriber("/mavros/local_position/velocity_local", TwistStamped)
 # RC topics
 SUB_RC_IN = Subscriber("/mavros/rc/in", RCIn)
 
@@ -238,7 +238,7 @@ class MAVROS_API:
         '''
         Returns the global velocity of the drone.
         '''
-        data : TwistStamped = SUB_VEL.get_latest_data(blocking=True)
+        data : TwistStamped = SUB_VEL.get_latest_data(blocking=False)
         return data.twist
     
     @_connected
@@ -526,7 +526,7 @@ class MAVROS_API:
                 time.sleep(0.1)
 
     @_armed_connected
-    def set_velocity(self, x : float, y : float, z : float):
+    def set_velocity(self, x : float, y : float, z : float, yr : float = None):
         '''
         Sets the linear velocity of the drone.
         WORKS
@@ -535,6 +535,8 @@ class MAVROS_API:
         data.linear.x = float(x)
         data.linear.y = float(y)
         data.linear.z = float(z)
+        if yr != None:
+            data.angular.z = float(yr)
         self.handler.publish_topic(PUB_SET_VEL, data)
 
     @_armed_connected
@@ -610,11 +612,14 @@ if __name__ == "__main__":
     api.log("Setting thrust ...")
     pose = api.get_global_pose()
     print(pose)
-    for i in range(50):
-        api.set_velocity(0,0.5,0)
-        # api.set_global_pose(pose[0], pose[1], alt=pose[2]+2, yaw=20)
-        # api.set_angle_velocity(0, 2, 0)
-        time.sleep(0.2)
+    for i in range(200):
+        # api.set_angle_velocity(0, 0, 1) # 0.2 rad/s
+        api.set_velocity(0,2,0,1)
+        vel: Twist = api.get_global_vel()
+        if(vel!=None):
+            print(f"Y Velocity: {vel.linear.y}m/s, Yaw Rate: {vel.angular.z}rad/s")
+        time.sleep(0.1)
+    api.set_velocity(0,0,0)
     time.sleep(5)
     api.land(at_home=True, blocking=True)
     api.disconnect()
