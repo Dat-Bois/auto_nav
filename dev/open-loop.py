@@ -37,19 +37,23 @@ if __name__ == '__main__':
     solver.set_hard_constraints(velocity_max=2, acceleration_max=1, max_tolerance=0.2)
     position = pose[0].x, pose[0].y, pose[0].z
     traj = solver.solve(position, waypoints, None, pose[2].yaw)
+    # Manual scale
+    max_time = 30
+    time_var = traj[:, 3]
+    multiplier = max_time / time_var[-1]
+    time_var = time_var * multiplier
+    traj[:, 3] = time_var
+    #--------------------------------
     profile = solver.profile(traj)
     solver.visualize(traj, waypoints, profile)
     if traj is None:
         api.log("Trajectory could not be solved")
         api.land(at_home=True, blocking=True)
         api.disconnect()
+    
     # traj = solver.temporal_scale(traj)
     api.log("Trajectory solved!")
-    # X = traj[:, :3].T
-    # T = traj[:, 3]
-    # velocity = np.gradient(X, T, axis=1)
-    # traj = np.hstack((X.T, T.reshape(-1, 1), velocity.T))
-    # print(traj.shape)
+
     api.log("Setting initial heading...")
     api.set_heading(traj[0][4], blocking=True)
     api.log("Executing trajectory...")
@@ -57,11 +61,20 @@ if __name__ == '__main__':
     # x y z t yr
     for i, step in enumerate(velocities):
         api.set_velocity(step[0], step[1], step[2], step[4])
-        time.sleep(velocities[i+1][3] - step[3] if i < len(velocities) - 1 else 0.1)
+        if i < len(velocities) - 1:
+            sleep = velocities[i+1][3] - step[3]
+        else:
+            sleep = 0.1
+        starttime = time.time()
+        while time.time() - starttime < sleep:
+            pt = api.get_local_pose(as_type="point")
+            if pt is not None:
+                profile.save_point(np.array([pt.x, pt.y, pt.z]))
 
     api.log("Finished...")
     api.set_velocity(0, 0, 0, 0)
-    time.sleep(10)
+    solver.visualize(traj, waypoints, actual_path=profile.get_actual_path())
+    # time.sleep(10)
     api.land(at_home=True, blocking=True)
     api.disconnect()
     print("Connection status: ", api.is_connected())

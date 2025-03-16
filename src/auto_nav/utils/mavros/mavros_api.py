@@ -210,7 +210,9 @@ class MAVROS_API:
         "quat" -> Quaternion
         "euler" -> Euler angles
         '''
-        data : PoseStamped = SUB_POSE.get_latest_data(blocking=True)
+        data : PoseStamped = SUB_POSE.get_latest_data(blocking=False)
+        if data == None:
+            return None
         point : Point = data.pose.position
         quat : ROS_Quaternion = data.pose.orientation
         euler = self.quaternion_to_euler(Quaternion(quat))

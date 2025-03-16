@@ -42,6 +42,8 @@ class Profile:
       self.psi_dot = psi_dot
       self.psi_ddot = psi_ddot
 
+      self._actual_path : np.ndarray = None
+
    def get_velocity(self) -> np.ndarray:
       '''
       Returns the velocity profile as vx, vy, vz, t, yr
@@ -52,6 +54,21 @@ class Profile:
       if self.psi is not None:
          velocity = np.insert(velocity, 4, self.psi, axis=1)
       return velocity
+   
+   def save_point(self, point: np.ndarray) -> None:
+      '''
+      Saves a point to the actual path.
+      '''
+      if self._actual_path is None:
+         self._actual_path = point
+      else:
+         self._actual_path = np.vstack((self._actual_path, point))
+
+   def clear_actual_path(self) -> None:
+      self._actual_path = None
+
+   def get_actual_path(self) -> np.ndarray:
+      return self._actual_path
       
 class BaseSolver:
    def __init__(self): 
@@ -186,7 +203,7 @@ class BaseSolver:
          time = time * 1.1
       return trajectory
 
-   def visualize(self, trajectory: np.ndarray, waypoints : np.ndarray, profile : Profile = None) -> None:
+   def visualize(self, trajectory: np.ndarray, waypoints : np.ndarray, profile : Profile = None, *, actual_path : np.ndarray = None) -> None:
       '''
       Solves and then visualizes the trajectory in 3D.
       '''
@@ -195,6 +212,9 @@ class BaseSolver:
       fig = plt.figure()
       ax = fig.add_subplot(111, projection='3d')
       ax.plot(trajectory[:, 0], trajectory[:, 1], trajectory[:, 2])
+      # If an actual path is provided, plot it in blue
+      if actual_path is not None:
+         ax.plot(actual_path[:, 0], actual_path[:, 1], actual_path[:, 2], color='blue', label='Actual Path')
       points = self._parse_waypoints(waypoints)
       if(len(points) == 4):
          x_points, y_points, z_points, yaw_points = points
