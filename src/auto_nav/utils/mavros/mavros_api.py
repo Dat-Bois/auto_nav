@@ -7,7 +7,8 @@ from threading import Thread, Lock
 from typing import List, Tuple
 
 import rclpy.parameter
-from .rclpy_handler import RCLPY_Handler, Publisher, Subscriber, WallTimer, Client, Euler, Quaternion
+from .rclpy_handler import RCLPY_Handler, Publisher, Subscriber, WallTimer, Client
+from .types import ROS_Quaternion, Quaternion, Euler, ROS_Point, Point, DroneState
 
 # MAVROS messages
 # Generic services
@@ -25,8 +26,7 @@ from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
 # Geographic messages
 from geographic_msgs.msg import GeoPoseStamped, GeoPointStamped
 # Geometry messages
-from geometry_msgs.msg import PoseStamped, Twist, TwistStamped, Point, Vector3
-from geometry_msgs.msg import Quaternion as ROS_Quaternion
+from geometry_msgs.msg import PoseStamped, Twist, TwistStamped, Vector3
 # Sensor messages
 from sensor_msgs.msg import BatteryState, Imu, NavSatFix
 # Built-in messages
@@ -179,26 +179,6 @@ class MAVROS_API:
         alt : Float64 = SUB_REL_ALT.get_latest_data(blocking=True)
         return (data.latitude, data.longitude, data.altitude, alt.data)
 
-    def quaternion_to_euler(self, quat : Quaternion) -> Euler:
-        '''
-        Converts a quaternion to Euler angles.
-        '''
-        x, y, z, w = quat.to_tuple()
-        t0 = +2.0 * (w * x + y * z)
-        t1 = +1.0 - 2.0 * (x * x + y * y)
-        roll_x = math.degrees(math.atan2(t0, t1))
-
-        t2 = +2.0 * (w * y - z * x)
-        t2 = +1.0 if t2 > +1.0 else t2
-        t2 = -1.0 if t2 < -1.0 else t2
-        pitch_y = math.degrees(math.asin(t2))
-
-        t3 = +2.0 * (w * z + x * y)
-        t4 = +1.0 - 2.0 * (y * y + z * z)
-        yaw_z = math.degrees(math.atan2(t3, t4))
-
-        return Euler(roll_x, pitch_y, yaw_z)
-
     @_connected
     def get_local_pose(self, *, as_type : str = None) -> Tuple[Point, Quaternion, Euler] | Point | Quaternion | Euler:
         '''
@@ -213,13 +193,13 @@ class MAVROS_API:
         data : PoseStamped = SUB_POSE.get_latest_data(blocking=False)
         if data == None:
             return None
-        point : Point = data.pose.position
-        quat : ROS_Quaternion = data.pose.orientation
-        euler = self.quaternion_to_euler(Quaternion(quat))
+        point : Point = Point(data.pose.position)
+        quat : Quaternion = Quaternion(data.pose.orientation)
+        euler = quat.quaternion_to_euler()
         if as_type == "point":
             return point
         elif as_type == "quat":
-            return Quaternion(quat)
+            return quat
         elif as_type == "euler":
             return euler
         elif as_type == None:
@@ -236,9 +216,9 @@ class MAVROS_API:
         return SUB_IMU.get_latest_data()
     
     @_connected
-    def get_global_vel(self) -> Twist:
+    def get_local_vel(self) -> Twist:
         '''
-        Returns the global velocity of the drone.
+        Returns the local velocity of the drone.
         '''
         data : TwistStamped = SUB_VEL.get_latest_data(blocking=False)
         return data.twist
@@ -279,6 +259,16 @@ class MAVROS_API:
         rssi and channels
         '''
         return SUB_RC_IN.get_latest_data()
+    
+    @_connected
+    def get_DroneState(self):
+        '''
+        Gets the feedback state of the drone.
+        Position, orientation, velocity.
+        '''
+        pose = self.get_local_pose()
+        vel = self.get_local_vel()
+        return DroneState(pose[0], pose[1], vel)
 
     '''
     ############## - SETTERS - ##############
@@ -511,7 +501,7 @@ class MAVROS_API:
         '''
         data = PoseStamped()
         data.header.stamp = self.handler.get_time()
-        data.pose.position = self.get_local_pose(as_type="point")
+        data.pose.position = self.get_local_pose(as_type="point").to_ros()
         data.pose.orientation = self.euler_to_quat(Euler(0, 0, -yaw)).to_ros()
         self.handler.publish_topic(PUB_LOCAL_SETPOINT, data)
 
@@ -589,7 +579,7 @@ class MAVROS_API:
             if isinstance(orientation, Euler):
                 pitch, yaw, roll = orientation.pitch, orientation.yaw, orientation.roll
             elif isinstance(orientation, Quaternion):
-                euler = self.quaternion_to_euler(orientation)
+                euler = orientation.quaternion_to_euler()
                 pitch, yaw, roll = euler.pitch, euler.yaw, euler.roll
             else:
                 self.log("Invalid orientation type. Must be Euler or Quaternion.")
@@ -617,7 +607,7 @@ if __name__ == "__main__":
     for i in range(200):
         # api.set_angle_velocity(0, 0, 1) # 0.2 rad/s
         api.set_velocity(0,2,0,1)
-        vel: Twist = api.get_global_vel()
+        vel: Twist = api.get_local_vel()
         if(vel!=None):
             print(f"Y Velocity: {vel.linear.y}m/s, Yaw Rate: {vel.angular.z}rad/s")
         time.sleep(0.1)

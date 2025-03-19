@@ -135,13 +135,16 @@ class BaseSolver:
       If the solver requires additional parameters, they can be passed as kwargs.
       '''
       if current_velocity is None:
-         self.current_velocity = np.zeros(3)
+         current_velocity = np.zeros(3)
+      if len(current_velocity) == 4:
+         current_velocity = current_velocity[:3]
       # Ensure that if the current velocity is greater than the max velocity, the max velocity is adjusted (only the greater values)
       if self.max_velocity is not None:
          for i in range(3):
             if abs(current_velocity[i]) > abs(self.max_velocity[i]):
                self.max_velocity[i] = current_velocity[i]
       self.current_position = current_position
+      self.current_velocity = current_velocity
       self.current_orientation = current_orientation
       self.waypoints = waypoints
       return self._solve(**kwargs)

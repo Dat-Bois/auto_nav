@@ -10,9 +10,9 @@ if __name__ == '__main__':
     api.connect()
     api.set_mode("GUIDED")
 
-    # api.land(at_home=True, blocking=True)
-    # api.disconnect()
-    # exit(0)
+    api.land(at_home=True, blocking=True)
+    api.disconnect()
+    exit(0)
 
     api.arm()
     api.set_gimbal(orientation=Euler(0, -10, 0))
@@ -36,6 +36,7 @@ if __name__ == '__main__':
     planner.set_hard_constraints(velocity_max=2, acceleration_max=1, max_tolerance=0.2)
     planner.update_state(state = api.get_DroneState())
     traj = planner.plan_global(set_time=30)
+    planner.set_trajectory(traj)
     #--------------------------------
     profile = solver.profile(traj)
     solver.visualize(traj, waypoints, profile)
@@ -50,19 +51,14 @@ if __name__ == '__main__':
     api.log("Setting initial heading...")
     api.set_heading(traj[0][4], blocking=True)
     api.log("Executing trajectory...")
-    velocities = profile.get_velocity()
     # x y z t yr
-    for i, step in enumerate(velocities):
-        api.set_velocity(step[0], step[1], step[2], step[4])
-        if i < len(velocities) - 1:
-            sleep = velocities[i+1][3] - step[3]
-        else:
-            sleep = 0.1
-        starttime = time.time()
-        while time.time() - starttime < sleep:
-            pt = api.get_local_pose(as_type="point")
-            if pt is not None:
-                profile.save_point(np.array([pt.x, pt.y, pt.z]))
+    vel = planner.next_velocity()
+    while(np.all(vel != np.array([0, 0, 0]))):
+        api.set_velocity(vel[0], vel[1], vel[2])
+        state = api.get_DroneState()
+        planner.update_state(state = state)
+        profile.save_point(np.array([state.pos.x, state.pos.y, state.pos.z]))
+        vel = planner.next_velocity()
 
     api.log("Finished...")
     api.set_velocity(0, 0, 0, 0)
