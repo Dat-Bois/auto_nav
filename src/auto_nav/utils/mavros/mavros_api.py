@@ -26,7 +26,7 @@ from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
 # Geographic messages
 from geographic_msgs.msg import GeoPoseStamped, GeoPointStamped
 # Geometry messages
-from geometry_msgs.msg import PoseStamped, Twist, TwistStamped, Vector3
+from geometry_msgs.msg import PoseStamped, Twist, TwistStamped, Vector3, Vector3Stamped
 # Sensor messages
 from sensor_msgs.msg import BatteryState, Imu, NavSatFix
 # Built-in messages
@@ -44,6 +44,7 @@ PUB_LOCAL_SETPOINT = Publisher("/mavros/setpoint_position/local", PoseStamped)
 PUB_SET_VEL = Publisher("/mavros/setpoint_velocity/cmd_vel_unstamped", Twist)
 PUB_SET_ANGLE_VEL = Publisher("/mavros/setpoint_attitude/cmd_vel", TwistStamped)
 PUB_SET_THRUST = Publisher("/mavros/setpoint_attitude/thrust", Thrust)
+PUB_SET_ACCEL = Publisher("/mavros/setpoint_accel/accel", Vector3Stamped)
 
 # Subscriber topics
 # State topics
@@ -548,6 +549,19 @@ class MAVROS_API:
         data2.thrust = 0.5
         self.handler.publish_topic(PUB_SET_ANGLE_VEL, data)
         self.handler.publish_topic(PUB_SET_THRUST, data2)
+
+    @_armed_connected
+    def set_acceleration(self, x : float, y : float, z : float):
+        '''
+        Sets the acceleration of the drone.
+        WORKS
+        '''
+        data = Vector3Stamped()
+        data.header.stamp = self.handler.get_time()
+        data.vector.x = float(x)
+        data.vector.y = float(y)
+        data.vector.z = float(z)
+        self.handler.publish_topic(PUB_SET_ACCEL, data)
 
     @_connected
     def _set_gimbal_callback(self):

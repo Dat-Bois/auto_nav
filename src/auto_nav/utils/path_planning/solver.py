@@ -52,8 +52,19 @@ class Profile:
       velocity = self.velocity.T
       velocity = np.insert(velocity, 3, self.times, axis=1)
       if self.psi is not None:
-         velocity = np.insert(velocity, 4, self.psi, axis=1)
+         velocity = np.insert(velocity, 4, self.psi_dot, axis=1)
       return velocity
+   
+   def get_acceleration(self) -> np.ndarray:
+      '''
+      Returns the acceleration profile as ax, ay, az, t, yrr
+      If there is no yaw rate, it will return ax, ay, az, t
+      '''
+      acceleration = self.acceleration.T
+      acceleration = np.insert(acceleration, 3, self.times, axis=1)
+      if self.psi is not None:
+         acceleration = np.insert(acceleration, 4, self.psi_ddot, axis=1)
+      return acceleration
    
    def save_point(self, point: np.ndarray) -> None:
       '''

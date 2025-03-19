@@ -35,7 +35,7 @@ if __name__ == '__main__':
     planner = Planner(waypoints, solver)
     planner.set_hard_constraints(velocity_max=2, acceleration_max=1, max_tolerance=0.2)
     planner.update_state(state = api.get_DroneState())
-    traj = planner.plan_global(set_time=30)
+    traj = planner.plan_global(set_time=20)
     #--------------------------------
     profile = solver.profile(traj)
     solver.visualize(traj, waypoints, profile)

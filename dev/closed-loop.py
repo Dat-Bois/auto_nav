@@ -10,9 +10,9 @@ if __name__ == '__main__':
     api.connect()
     api.set_mode("GUIDED")
 
-    api.land(at_home=True, blocking=True)
-    api.disconnect()
-    exit(0)
+    # api.land(at_home=True, blocking=True)
+    # api.disconnect()
+    # exit(0)
 
     api.arm()
     api.set_gimbal(orientation=Euler(0, -10, 0))
@@ -51,14 +51,16 @@ if __name__ == '__main__':
     api.log("Setting initial heading...")
     api.set_heading(traj[0][4], blocking=True)
     api.log("Executing trajectory...")
+    vels = profile.get_velocity()
     # x y z t yr
-    vel = planner.next_velocity()
+    vel = planner.next_velocity(velocities = vels)
     while(np.all(vel != np.array([0, 0, 0]))):
         api.set_velocity(vel[0], vel[1], vel[2])
         state = api.get_DroneState()
         planner.update_state(state = state)
         profile.save_point(np.array([state.pos.x, state.pos.y, state.pos.z]))
-        vel = planner.next_velocity()
+        time.sleep(0.1)
+        vel = planner.next_velocity(velocities = vels)
 
     api.log("Finished...")
     api.set_velocity(0, 0, 0, 0)

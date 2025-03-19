@@ -81,36 +81,50 @@ class Planner:
         look_dist = K * np.linalg.norm(self.current_velocity[:3])
         dists = np.linalg.norm(self.remaining_trajectory[:, :3] - self.current_position, axis=1)
         idx = np.argmin(dists)
-        arc_dists = np.cumsum(np.linalg.norm(np.diff(self.traj[:, :3], axis=0), axis=1))
-        arc_dists = np.insert(arc_dists, 0, 0)
-        for i in range(idx, len(self.traj)):
-            if arc_dists[i] - arc_dists[idx] >= look_dist:
-                return self.traj[i]
-        return self.traj[-1]
+        # Check if the idx is in front or behind the current position
+        if np.dot(self.remaining_trajectory[idx, :3] - self.current_position, self.current_velocity[:3]) < 0:
+            idx += 1
+        if np.all(self.remaining_trajectory[idx,:3] == self.current_position):
+            idx += 1
+        return idx
+        # arc_dists = np.cumsum(np.linalg.norm(np.diff(self.traj[:, :3], axis=0), axis=1))
+        # arc_dists = np.insert(arc_dists, 0, 0)
+        # for i in range(idx, len(self.traj)):
+        #     if arc_dists[i] - arc_dists[idx] >= look_dist:
+        #         return self.traj[i]
+        # return self.traj[-1]
+
+    def _find_next(self):
+        dists = np.linalg.norm(self.remaining_trajectory[:, :3] - self.current_position, axis=1)
+        # filter only the dists < 0.3
+        for idx, dist in enumerate(dists):
+            if dist < 0.3:
+               break 
+        # ensure idx is in front of current position
+        if np.dot(self.remaining_trajectory[idx, :3] - self.current_position, self.current_velocity[:3]) < 0 or np.all(self.remaining_trajectory[idx,:3] == self.current_position):
+            idx += 1
+        # delete trajectory up to idx
+        self.remaining_trajectory = self.remaining_trajectory[idx:]
+        return idx
     
-    def next_velocity(self, *, K : float = 1.5, KP : float = 1.0, KD : float = 0.1):
+    def next_velocity(self, *, K : float = 1.5, KP : float = 1.0, KD : float = 0.1, velocities : np.ndarray | None = None):
         '''
         Determine the next velocity command.
+        DOESN'T WORK 
         '''
         if self.current_position is None or self.current_velocity is None or self.current_orientation is None:
             raise ValueError('State not updated')
         if self.traj is None:
             raise ValueError('Trajectory not planned')
-        p_des = self._find_lookahead(K=K)[:3]
-        if(p_des == self.traj[-1][:3]).all():
+        idx = self._find_next()
+        if idx is None:
             return np.array([0, 0, 0])
-        p = self.current_position
+        if idx >= len(velocities):
+            return np.array([0, 0, 0])
         v = self.current_velocity[:3]
-        if self.old_time != None: 
-            dt = time.time() - self.old_time
-        else:
-            dt = 0.1
-        v_des = (p_des - p) / np.linalg.norm(p_des - p) * np.linalg.norm(v)
-        v_err = v_des - v
-        a_des = KP * v_err + KD * (v_err - self.v_err) / dt
-        self.v_err = v_err
-        self.old_time = time.time()
-        return v + a_des * dt
+        v_des = velocities[idx,:3]
+        print(v_des)
+        return v_des
 
     def plan_global(self, *, waypoints : np.ndarray | None = None, max_time: float | None = None, set_time: float | None = None):
         '''
