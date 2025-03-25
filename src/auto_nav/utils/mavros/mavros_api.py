@@ -2,6 +2,7 @@ import math
 import rclpy
 import time
 import errno
+import numpy as np
 from threading import Thread, Lock
 
 from typing import List, Tuple
@@ -14,7 +15,7 @@ from .types import ROS_Quaternion, Quaternion, Euler, ROS_Point, Point, DroneSta
 # Generic services
 from mavros_msgs.srv import CommandBool, CommandHome, CommandTOL, SetMode, StreamRate, ParamSet
 # Control messages
-from mavros_msgs.msg import State, OverrideRCIn, RCIn, Thrust
+from mavros_msgs.msg import State, OverrideRCIn, RCIn, Thrust, FullSetpoint
 # Waypoint messages
 from mavros_msgs.msg import WaypointReached, WaypointList
 from mavros_msgs.srv import WaypointSetCurrent, WaypointPull, WaypointPush, WaypointClear
@@ -45,6 +46,7 @@ PUB_SET_VEL = Publisher("/mavros/setpoint_velocity/cmd_vel_unstamped", Twist)
 PUB_SET_ANGLE_VEL = Publisher("/mavros/setpoint_attitude/cmd_vel", TwistStamped)
 PUB_SET_THRUST = Publisher("/mavros/setpoint_attitude/thrust", Thrust)
 PUB_SET_ACCEL = Publisher("/mavros/setpoint_accel/accel", Vector3Stamped)
+PUB_SET_FULL = Publisher("/mavros/setpoint_full/cmd_full_setpoint", FullSetpoint)
 
 # Subscriber topics
 # State topics
@@ -497,9 +499,6 @@ class MAVROS_API:
 
     @_armed_connected
     def _set_heading(self, yaw : float):
-        '''
-        Sets the heading of the drone.
-        '''
         data = PoseStamped()
         data.header.stamp = self.handler.get_time()
         data.pose.position = self.get_local_pose(as_type="point").to_ros()
@@ -562,6 +561,66 @@ class MAVROS_API:
         data.vector.y = float(y)
         data.vector.z = float(z)
         self.handler.publish_topic(PUB_SET_ACCEL, data)
+
+    def build_setpoint_typemask(pxyz, vxyz, axyz, yaw, yaw_rate):
+        typemask = 0
+        if pxyz != None:
+            if isinstance(pxyz, tuple) or isinstance(pxyz, list):
+                pxyz = [np.nan if i is None else i for i in pxyz]
+                pxyz = np.array(pxyz)
+            for i in range(3):
+                if pxyz[i] != np.nan: typemask |= (1 << i)
+        if vxyz != None:
+            if isinstance(vxyz, tuple) or isinstance(vxyz, list):
+                vxyz = [np.nan if i is None else i for i in vxyz]
+                vxyz = np.array(vxyz)
+            for i in range(3):
+                if vxyz[i] != np.nan: typemask |= (1 << (i + 3))
+        if axyz != None:
+            if isinstance(axyz, tuple) or isinstance(axyz, list):
+                axyz = [np.nan if i is None else i for i in axyz]
+                axyz = np.array(axyz)
+            for i in range(3):
+                if axyz[i] != np.nan: typemask |= (1 << (i + 6))
+        if yaw != None:
+            if isinstance(yaw, float) or isinstance(yaw, int):
+                typemask |= (1 << 10)
+                yaw = np.nan if yaw == None else float(yaw)
+        if yaw_rate != None:
+            if isinstance(yaw_rate, float) or isinstance(yaw_rate, int):
+                typemask |= (1 << 11)
+                yaw_rate = np.nan if yaw_rate == None else float(yaw_rate)
+        return typemask, pxyz, vxyz, axyz, yaw, yaw_rate
+        
+    @_armed_connected
+    def set_full_setpoint(self, pxyz : Tuple[float, float, float] | np.ndarray = None, 
+                                vxyz : Tuple[float, float, float] | np.ndarray = None, 
+                                axyz : Tuple[float, float, float] | np.ndarray = None,
+                                yaw: float = None, yaw_rate : float = None, *, typemask : int = None):
+        '''
+        Sets the full setpoint of the drone.
+        NEED TO TEST
+        '''
+        new_typemask, pxyz, vxyz, axyz, yaw, yaw_rate = self.build_setpoint_typemask(pxyz, vxyz, axyz, yaw, yaw_rate)
+        if typemask == None:
+            typemask = new_typemask
+        if typemask == 3583: # 0b110111111111
+            return # all values are None
+        data = FullSetpoint()
+        data.header.stamp = self.handler.get_time()
+        data.type_mask = typemask
+        data.position.x = pxyz[0]
+        data.position.y = pxyz[1]
+        data.position.z = pxyz[2]
+        data.velocity.x = vxyz[0]
+        data.velocity.y = vxyz[1]
+        data.velocity.z = vxyz[2]
+        data.acceleration.x = axyz[0]
+        data.acceleration.y = axyz[1]
+        data.acceleration.z = axyz[2]
+        data.yaw = yaw
+        data.yaw_rate = yaw_rate
+        self.handler.publish_topic(PUB_SET_FULL, data)
 
     @_connected
     def _set_gimbal_callback(self):
