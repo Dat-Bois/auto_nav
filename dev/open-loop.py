@@ -51,11 +51,13 @@ if __name__ == '__main__':
     api.set_heading(traj[0][4], blocking=True)
     api.log("Executing trajectory...")
     velocities = profile.get_velocity()
+    accels = profile.get_acceleration()
     # x y z t yr
-    for i, step in enumerate(velocities):
-        api.set_velocity(step[0], step[1], step[2], step[4])
+    for i, step in enumerate(zip(traj, velocities, accels)):
+        # api.set_velocity(step[0], step[1], step[2], step[4])
+        api.set_full_setpoint(vxyz=step[1][:3], yaw_rate=step[1][4])
         if i < len(velocities) - 1:
-            sleep = velocities[i+1][3] - step[3]
+            sleep = velocities[i+1][3] - step[1][3]
         else:
             sleep = 0.1
         starttime = time.time()

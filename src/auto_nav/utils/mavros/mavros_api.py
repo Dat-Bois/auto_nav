@@ -562,34 +562,39 @@ class MAVROS_API:
         data.vector.z = float(z)
         self.handler.publish_topic(PUB_SET_ACCEL, data)
 
-    def build_setpoint_typemask(pxyz, vxyz, axyz, yaw, yaw_rate):
+    def _build_setpoint_typemask(self, pxyz, vxyz, axyz, yaw, yaw_rate):
+        # https://mavlink.io/en/messages/common.html#POSITION_TARGET_TYPEMASK
         typemask = 0
-        if pxyz != None:
+        if pxyz is not None:
             if isinstance(pxyz, tuple) or isinstance(pxyz, list):
                 pxyz = [np.nan if i is None else i for i in pxyz]
                 pxyz = np.array(pxyz)
-            for i in range(3):
-                if pxyz[i] != np.nan: typemask |= (1 << i)
-        if vxyz != None:
+        else: pxyz = [np.nan, np.nan, np.nan]
+        for i in range(3):
+            if np.isnan(pxyz[i]): typemask |= (1 << i)
+
+        if vxyz is not None:
             if isinstance(vxyz, tuple) or isinstance(vxyz, list):
                 vxyz = [np.nan if i is None else i for i in vxyz]
                 vxyz = np.array(vxyz)
-            for i in range(3):
-                if vxyz[i] != np.nan: typemask |= (1 << (i + 3))
-        if axyz != None:
+        else: vxyz = [np.nan, np.nan, np.nan]
+        for i in range(3):
+            if np.isnan(vxyz[i]): typemask |= (1 << (i + 3))
+
+        if axyz is not None:
             if isinstance(axyz, tuple) or isinstance(axyz, list):
                 axyz = [np.nan if i is None else i for i in axyz]
                 axyz = np.array(axyz)
-            for i in range(3):
-                if axyz[i] != np.nan: typemask |= (1 << (i + 6))
-        if yaw != None:
-            if isinstance(yaw, float) or isinstance(yaw, int):
-                typemask |= (1 << 10)
-                yaw = np.nan if yaw == None else float(yaw)
-        if yaw_rate != None:
-            if isinstance(yaw_rate, float) or isinstance(yaw_rate, int):
-                typemask |= (1 << 11)
-                yaw_rate = np.nan if yaw_rate == None else float(yaw_rate)
+        else: axyz = [np.nan, np.nan, np.nan]
+        for i in range(3):
+            if np.isnan(axyz[i]): typemask |= (1 << (i + 6))
+            
+        yaw = float(yaw) if yaw != None else np.nan
+        if np.isnan(yaw): typemask |= (1 << 10)
+
+        yaw_rate = np.nan if yaw_rate == None else float(yaw_rate)
+        if np.isnan(yaw_rate): typemask |= (1 << 11)
+
         return typemask, pxyz, vxyz, axyz, yaw, yaw_rate
         
     @_armed_connected
@@ -601,7 +606,7 @@ class MAVROS_API:
         Sets the full setpoint of the drone.
         NEED TO TEST
         '''
-        new_typemask, pxyz, vxyz, axyz, yaw, yaw_rate = self.build_setpoint_typemask(pxyz, vxyz, axyz, yaw, yaw_rate)
+        new_typemask, pxyz, vxyz, axyz, yaw, yaw_rate = self._build_setpoint_typemask(pxyz, vxyz, axyz, yaw, yaw_rate)
         if typemask == None:
             typemask = new_typemask
         if typemask == 3583: # 0b110111111111
