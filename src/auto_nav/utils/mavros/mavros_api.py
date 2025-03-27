@@ -593,7 +593,7 @@ class MAVROS_API:
         if np.isnan(yaw): typemask |= (1 << 10)
 
         yaw_rate = np.nan if yaw_rate == None else float(yaw_rate)
-        if np.isnan(yaw_rate): typemask |= (1 << 11)
+        if np.isnan(yaw_rate): yaw_rate = 0.0 #if yawrate is not passed, set it as 0 so its "ignored"
 
         return typemask, pxyz, vxyz, axyz, yaw, yaw_rate
         

@@ -33,9 +33,9 @@ if __name__ == '__main__':
 
     solver = CasSolver()
     planner = Planner(waypoints, solver)
-    planner.set_hard_constraints(velocity_max=2, acceleration_max=1, max_tolerance=0.2)
+    planner.set_hard_constraints(max_velocity=2, max_acceleration=3, max_tolerance=0.2)
     planner.update_state(state = api.get_DroneState())
-    traj = planner.plan_global(set_time=20)
+    traj = planner.plan_global()
     #--------------------------------
     profile = solver.profile(traj)
     solver.visualize(traj, waypoints, profile)
@@ -47,16 +47,23 @@ if __name__ == '__main__':
     # traj = solver.temporal_scale(traj)
     api.log("Trajectory solved!")
 
-    api.log("Setting initial heading...")
-    api.set_heading(traj[0][4], blocking=True)
-    api.log("Executing trajectory...")
+    # api.log("Setting initial heading...")
+    # api.set_heading(traj[0][4], blocking=True)
+    # api.log("Executing trajectory...")
     velocities = profile.get_velocity()
     accels = profile.get_acceleration()
     # x y z t yr
     for i, step in enumerate(zip(traj, velocities, accels)):
         # api.set_velocity(step[0], step[1], step[2], step[4])
-        api.set_full_setpoint(vxyz=step[1][:3], yaw_rate=step[1][4])
+        '''Ok logically at a timestep what needs to happen:
+        1. At a timestep, that is what the pos, vel, accel should be.
+        2. But the assumption is you aren't there, you are at the previous timestep. 
+        So you give the setpoint of the next timestep, but wait the current timestep.
+        '''
+        api.set_full_setpoint(pxyz=step[0][:3], vxyz=step[1][:3], axyz=step[2][:3]) #, yaw_rate=step[1][4]
+        # api.set_velocity(step[1][0], step[1][1], step[1][2]) #, yaw_rate=step[1][4])
         if i < len(velocities) - 1:
+            # sleep = step[1][3] - velocities[i-1][3]
             sleep = velocities[i+1][3] - step[1][3]
         else:
             sleep = 0.1

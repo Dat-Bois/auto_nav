@@ -122,6 +122,8 @@ class BaseSolver:
          - max_yaw_acceleration : float
          - max_tolerance : float (meters) default 0.2
       '''
+      if kwargs.get('kwargs') is not None:
+         kwargs = kwargs.get('kwargs')
       self.max_velocity = kwargs.get('max_velocity', None)
       self.max_acceleration = kwargs.get('max_acceleration', None)
       self.max_jerk = kwargs.get('max_jerk', None)
@@ -152,8 +154,8 @@ class BaseSolver:
       # Ensure that if the current velocity is greater than the max velocity, the max velocity is adjusted (only the greater values)
       if self.max_velocity is not None:
          for i in range(3):
-            if abs(current_velocity[i]) > abs(self.max_velocity[i]):
-               self.max_velocity[i] = current_velocity[i]
+            if abs(current_velocity[i]) > abs(self.max_velocity):
+               self.max_velocity = current_velocity[i]
       self.current_position = current_position
       self.current_velocity = current_velocity
       self.current_orientation = current_orientation
@@ -193,9 +195,9 @@ class BaseSolver:
       '''
       if trajectory is None:
          return None
-      if trajectory.shape[1] > 4:
-         print("Temporal scaling not implemented for casadi solver.")
-         return trajectory
+      # if trajectory.shape[1] > 4:
+      #    print("Temporal scaling not implemented for casadi solver.")
+      #    return trajectory
       # Get the time from the trajectory
       time = trajectory[:, 3]
       # Iteratively scale time until all constraints are met
@@ -463,12 +465,15 @@ class CasSolver(BaseSolver):
          optimizer.subject_to(psi[0] == yaw_points[0] * (np.pi/180))
       #--- Add motion constraints ---#
       for t in range(T - 1):
-         R_t = ca.vertcat(
-            ca.horzcat(ca.cos(psi[t]), -ca.sin(psi[t]), 0),
-            ca.horzcat(ca.sin(psi[t]), ca.cos(psi[t]), 0),
-            ca.horzcat(0, 0, 1)
-         )
-         optimizer.subject_to(X[:, t+1] == X[:, t] + R_t @ V[:, t] * dt + 0.5 * R_t @ A[:, t] * dt**2 + (1/6) * R_t @ J[:, t] * dt**3 + (1/24) * R_t @ S[:, t] * dt**4)
+         if(kwargs.get("use_body_vel", False)):
+            R_t = ca.vertcat(
+               ca.horzcat(ca.cos(psi[t]), -ca.sin(psi[t]), 0),
+               ca.horzcat(ca.sin(psi[t]), ca.cos(psi[t]), 0),
+               ca.horzcat(0, 0, 1)
+            )
+            optimizer.subject_to(X[:, t+1] == X[:, t] + R_t @ V[:, t] * dt + 0.5 * R_t @ A[:, t] * dt**2 + (1/6) * R_t @ J[:, t] * dt**3 + (1/24) * R_t @ S[:, t] * dt**4)
+         else:
+            optimizer.subject_to(X[:, t+1] == X[:, t] + V[:, t] * dt + 0.5 * A[:, t] * dt**2 + (1/6) * J[:, t] * dt**3 + (1/24) * S[:, t] * dt**4)
          optimizer.subject_to(V[:, t+1] == V[:, t] + A[:, t] * dt + 0.5 * J[:, t] * dt**2 + (1/6) * S[:, t] * dt**3)
          optimizer.subject_to(A[:, t+1] == A[:, t] + J[:, t] * dt + 0.5 * S[:, t] * dt**2)
          optimizer.subject_to(J[:, t+1] == J[:, t] + S[:, t] * dt)
@@ -476,12 +481,39 @@ class CasSolver(BaseSolver):
          optimizer.subject_to(psi[t+1] == psi[t] + psi_dot[t] * dt + 0.5 * psi_ddot[t] * dt**2)
          optimizer.subject_to(psi_dot[t+1] == psi_dot[t] + psi_ddot[t] * dt)
       #--- Velocity and acceleration limits ---#
+      # Velocity constraints
       if self.max_velocity is not None:
-         optimizer.subject_to(ca.norm_2(V) <= self.max_velocity)
+         optimizer.subject_to(-self.max_velocity <= V[0, :])
+         optimizer.subject_to(V[0, :] <= self.max_velocity)
+         
+         optimizer.subject_to(-self.max_velocity <= V[1, :])
+         optimizer.subject_to(V[1, :] <= self.max_velocity)
+         
+         optimizer.subject_to(-self.max_velocity <= V[2, :])
+         optimizer.subject_to(V[2, :] <= self.max_velocity)
+
+      # Acceleration constraints
       if self.max_acceleration is not None:
-         optimizer.subject_to(ca.norm_2(A) <= self.max_acceleration)             
+         optimizer.subject_to(-self.max_acceleration <= A[0, :])
+         optimizer.subject_to(A[0, :] <= self.max_acceleration)
+         
+         optimizer.subject_to(-self.max_acceleration <= A[1, :])
+         optimizer.subject_to(A[1, :] <= self.max_acceleration)
+         
+         optimizer.subject_to(-self.max_acceleration <= A[2, :])
+         optimizer.subject_to(A[2, :] <= self.max_acceleration)
+
+      # Jerk constraints
       if self.max_jerk is not None:
-         optimizer.subject_to(ca.norm_2(J) <= self.max_jerk)
+         optimizer.subject_to(-self.max_jerk <= J[0, :])
+         optimizer.subject_to(J[0, :] <= self.max_jerk)
+         
+         optimizer.subject_to(-self.max_jerk <= J[1, :])
+         optimizer.subject_to(J[1, :] <= self.max_jerk)
+         
+         optimizer.subject_to(-self.max_jerk <= J[2, :])
+         optimizer.subject_to(J[2, :] <= self.max_jerk)
+
       #--- Define waypoints and tolerance ---#
       tolerance = self.tolerance
       yaw_tolerance = 2*(np.pi/180) # to radians
@@ -501,7 +533,7 @@ class CasSolver(BaseSolver):
       eps = 1e-6
       heading_angle = ca.atan2(V[1, :] + eps, V[0, :] + eps)
       cost += ca.sumsqr(psi - ca.transpose(heading_angle))
-      cost += ca.sumsqr(psi_dot)
+      cost += ca.sumsqr(psi_dot) * 10
       cost += ca.sumsqr(psi_ddot)
       #--- Solve the optimization problem ---#
       optimizer.minimize(cost)
@@ -511,12 +543,12 @@ class CasSolver(BaseSolver):
       solution : ca.OptiSol = None
       try:
          solution = optimizer.solve()
-      except:
-         print("Failed to solve")
+      except Exception as e:
+         print(f"Failed to solve: \n{e}")
          return None
       #--- Extract optimized trajectory ---#
       if solution.value(X) is None:
-         print("Failed to solve")
+         print("Failed to solve: X is None")
          return None
       trajectory = solution.value(X)
       trajectory = trajectory.T
@@ -645,14 +677,12 @@ if __name__  == "__main__":
    # waypoints = np.delete(waypoints, 3, axis=1)
    solver = CasSolver()
    # solver.set_hard_constraints(max_tolerance=0.2)
-   solver.set_hard_constraints(velocity_max=2, acceleration_max=1, max_tolerance=0.2)
+   solver.set_hard_constraints(max_velocity=2, max_acceleration=5, max_tolerance=0.2)
    trajectory = solver.solve(None, waypoints)
    # for i in trajectory:
    #    print("Line:", i)
    profile = solver.profile(trajectory)
-   print(profile.velocity[0:5])
-   print(profile.get_velocity()[0:5])
-   # solver.visualize(trajectory, waypoints, profile)
+   solver.visualize(trajectory, waypoints, profile)
 
    # solver.set_hard_constraints(max_jerk=3)
    # solver.temporal_scale(trajectory)

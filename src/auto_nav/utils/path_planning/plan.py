@@ -50,8 +50,9 @@ class Planner:
         Set hard constraints for the solver.
         '''
         if constraints is not None:
-            self.solver.set_hard_constraints(constraints)
-        self.solver.set_hard_constraints(kwargs = kwargs)
+            self.solver.set_hard_constraints(kwargs = constraints)
+        else:
+            self.solver.set_hard_constraints(kwargs = kwargs)
 
     def update_state(self, *,   position : np.ndarray | None = None, 
                                 velocity : np.ndarray | None = None, 
@@ -137,11 +138,12 @@ class Planner:
             raise ValueError('No waypoints provided')
         traj = self.solver.solve(self.current_position, waypoints, self.current_velocity, self.current_orientation)
         if traj is None:
+            print('***Trajectory could not be solved, applying temporal scaling...***')
             # Relax constraints and replan, but save the original constraints and then reapply them for temporal scaling
             constraints = self.solver.get_hard_constraints()
-            self.solver.set_hard_constraints({})
+            self.set_hard_constraints(constraints = {})
             traj = self.solver.solve(self.current_position, waypoints, self.current_velocity, self.current_orientation)
-            self.solver.set_hard_constraints(constraints)
+            self.set_hard_constraints(constraints = constraints)
             if set_time is not None:
                 time_var = traj[:, 3]
                 multiplier = set_time / time_var[-1]
