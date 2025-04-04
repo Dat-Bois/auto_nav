@@ -227,6 +227,7 @@ class BaseSolver:
          return
       fig = plt.figure()
       ax = fig.add_subplot(111, projection='3d')
+      ax.set_zlim(0,7)
       ax.plot(trajectory[:, 0], trajectory[:, 1], trajectory[:, 2])
       # If an actual path is provided, plot it in blue
       if actual_path is not None:
@@ -564,17 +565,17 @@ class CasSolver(BaseSolver):
 
       
 if __name__  == "__main__":
-   waypoints = np.array([  [0, 0, 0], 
-                           [1, 2, 0],
-                           [2, 0, 2], 
-                           [3, -2.2, 2], 
-                           [1.5, 0, 2], 
-                           [5, 1, 1],
-                           [6, 0, 0], 
-                           [7, 2, 0],
-                           [8, 0, 0],
-                           [9, 0, 0]
-                           ])
+   # waypoints = np.array([  [0, 0, 0], 
+   #                         [1, 2, 0],
+   #                         [2, 0, 2], 
+   #                         [3, -2.2, 2], 
+   #                         [1.5, 0, 2], 
+   #                         [5, 1, 1],
+   #                         [6, 0, 0], 
+   #                         [7, 2, 0],
+   #                         [8, 0, 0],
+   #                         [9, 0, 0]
+   #                         ])
    # waypoints = np.array([  [0, 0, 0, 90], 
    #                         [1, 2, 0, 180],
    #                         [2, 0, 2, -1], 
@@ -675,10 +676,17 @@ if __name__  == "__main__":
 #  [  1.84017226,   9.40531929,   1.35],
 #  [  1.21      ,  10.24      ,   1.  ]])
    # waypoints = np.delete(waypoints, 3, axis=1)
+   waypoints = np.array([
+      [20,10,1.45],
+      [34,12,1.45],
+      [20,16,1.45],
+      [12, 14, 1.45],
+      [20,10,1.45]
+   ])
    solver = CasSolver()
    # solver.set_hard_constraints(max_tolerance=0.2)
    solver.set_hard_constraints(max_velocity=2, max_acceleration=5, max_tolerance=0.2)
-   trajectory = solver.solve(None, waypoints)
+   trajectory = solver.solve([18,10,0], waypoints)
    # for i in trajectory:
    #    print("Line:", i)
    profile = solver.profile(trajectory)

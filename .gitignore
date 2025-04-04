@@ -5,3 +5,4 @@
 *.egg
 src/auto_nav/utils/path_planning/logs/*
 dev/sim_runs/*
+dev/temp/*

@@ -10,6 +10,7 @@ from typing import List, Tuple
 import rclpy.parameter
 from .rclpy_handler import RCLPY_Handler, Publisher, Subscriber, WallTimer, Client
 from .types import ROS_Quaternion, Quaternion, Euler, ROS_Point, Point, DroneState
+from .sim.gz_truth import GzTopicParser
 
 # MAVROS messages
 # Generic services
@@ -48,6 +49,8 @@ PUB_SET_THRUST = Publisher("/mavros/setpoint_attitude/thrust", Thrust)
 PUB_SET_ACCEL = Publisher("/mavros/setpoint_accel/accel", Vector3Stamped)
 PUB_SET_FULL = Publisher("/mavros/setpoint_full/cmd_full_setpoint", FullSetpoint)
 
+SIM_SET_GPORIGIN = Publisher("/mavros/global_position/set_gp_origin", GeoPointStamped)
+
 # Subscriber topics
 # State topics
 SUB_STATE = Subscriber("/mavros/state", State)
@@ -78,7 +81,7 @@ CLI_SET_PARAM = Client("/mavros/param/set", ParamSet)
 #---------------------------------#
 class MAVROS_API:
 
-    def __init__(self, handler: RCLPY_Handler):
+    def __init__(self, handler: RCLPY_Handler, *, sim : bool = False):
         self.handler = handler
         self.init_topics()
         self.conn_thread = Thread(target=self._connect, daemon=True)
@@ -86,9 +89,11 @@ class MAVROS_API:
         self.mode = None
         
         # When using simulation, set this to True
-        self.gz = True
+        self.gz = sim
         self.gimbal_channels = [0,0,0]
-        self.set_gimbal()
+        if self.gz:
+            self.set_gimbal()
+            self.gz_truth = GzTopicParser()
 
     def connect(self):
         self.handler.log("Starting connection thread ...")
@@ -150,7 +155,8 @@ class MAVROS_API:
             if self.is_connected():
                 return func(self, *args, **kwargs)
             else:
-                self.log("Not connected to MAVROS!")
+                self.log(f"Not connected to MAVROS! {func}")
+                time.sleep(1)
         return wrapper
 
     @_connected
@@ -183,7 +189,7 @@ class MAVROS_API:
         return (data.latitude, data.longitude, data.altitude, alt.data)
 
     @_connected
-    def get_local_pose(self, *, as_type : str = None) -> Tuple[Point, Quaternion, Euler] | Point | Quaternion | Euler:
+    def get_local_pose(self, *, as_type : str = None, ground_truth : bool = False) -> Tuple[Point, Quaternion, Euler] | Point | Quaternion | Euler:
         '''
         Returns three objects: one XYZ, one Quaternion, one Euler.
         ((x, y, z), (x, y, z, w), (roll, pitch, yaw))
@@ -193,7 +199,10 @@ class MAVROS_API:
         "quat" -> Quaternion
         "euler" -> Euler angles
         '''
-        data : PoseStamped = SUB_POSE.get_latest_data(blocking=False)
+        if ground_truth and self.gz:
+            data : PoseStamped = self.gz_truth.get_pose()
+        else:
+            data : PoseStamped = SUB_POSE.get_latest_data(blocking=False)
         if data == None:
             return None
         point : Point = Point(data.pose.position)
@@ -433,6 +442,19 @@ class MAVROS_API:
     '''
     PUBLISHER BASED FUNCTIONS
     '''
+
+    def set_gp_origin(self, lat: float, lon: float, alt: float = 0.0):
+        '''
+        Sets the global position origin for the simulation.
+        This is used to set the GP origin in the simulation.
+        '''
+        data = GeoPointStamped()
+        data.header.stamp = self.handler.get_time()
+        data.position.latitude = lat
+        data.position.longitude = lon
+        data.position.altitude = alt
+        self.log(f"Setting GP origin to ({lat}, {lon}, {alt}) ...")
+        self.handler.publish_topic(SIM_SET_GPORIGIN, data)
 
     @_armed_connected
     def set_rc(self, channels : List[int]):
