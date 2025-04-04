@@ -1,35 +1,31 @@
+import os
 import time
 import numpy as np
 from auto_nav import CasSolver, QPSolver, MAVROS_API, RCLPY_Handler, Euler, Quaternion, Planner
 
-
+SIM = os.getenv('RUN_SIM', False)
 
 if __name__ == '__main__':
     handler = RCLPY_Handler("mavros_node")
-    api = MAVROS_API(handler, sim=False)
+    api = MAVROS_API(handler, sim=SIM)
     api.connect()
     api.set_mode("GUIDED")
-
-    # api.set_home()
 
     # api.land(at_home=True, blocking=True)
     # api.disconnect()
     # exit(0)
 
     api.set_gp_origin(-35.3632621, 149.1652374, 10.0)
-    # api.disconnect()
-    # exit(0)
 
     api.arm()
-    # api.set_gimbal(orientation=Euler(0, -10, 0))
     api.takeoff(1, blocking=True)
     
     api.log("Solving trajectory...")
     waypoints = np.array([
       [20,10,1.45],
-      [34,12,1.45],
+      [32,12,1.45],
       [20,16,1.45],
-      [12, 14, 1.45],
+      [14, 14, 1.45],
       [20,10,1.45]
    ])
 
@@ -44,7 +40,7 @@ if __name__ == '__main__':
     # solver.visualize(traj, waypoints, profile)
     if traj is None:
         api.log("Trajectory could not be solved")
-        api.land(at_home=True, blocking=True)
+        api.land(at_home=SIM, blocking=True)
         api.disconnect()
     
     # traj = solver.temporal_scale(traj)
@@ -63,7 +59,7 @@ if __name__ == '__main__':
         2. But the assumption is you aren't there, you are at the previous timestep. 
         So you give the setpoint of the next timestep, but wait the current timestep.
         '''
-        api.set_full_setpoint(pxyz=step[0][:3], vxyz=step[1][:3], axyz=step[2][:3]) #, yaw_rate=step[1][4]
+        api.set_full_setpoint(vxyz=step[1][:3], axyz=step[2][:3]) #, yaw_rate=step[1][4]
         # api.set_velocity(step[1][0], step[1][1], step[1][2]) #, yaw_rate=step[1][4])
         if i < len(velocities) - 1:
             # sleep = step[1][3] - velocities[i-1][3]
@@ -72,7 +68,7 @@ if __name__ == '__main__':
             sleep = 0.1
         starttime = time.time()
         while time.time() - starttime < sleep:
-            pt = api.get_local_pose(as_type="point", ground_truth=True)
+            pt = api.get_local_pose(as_type="point", ground_truth=SIM)
             if pt is not None:
                 profile.save_point(np.array([pt.x, pt.y, pt.z]))
 
@@ -80,7 +76,7 @@ if __name__ == '__main__':
     api.set_velocity(0, 0, 0, 0)
     # solver.visualize(traj, waypoints, actual_path=profile.get_actual_path())
     # time.sleep(10)
-    api.land(at_home=False, blocking=True)
+    api.land(at_home=SIM, blocking=True)
     api.disconnect()
     print("Connection status: ", api.is_connected())
     print("Done!")
