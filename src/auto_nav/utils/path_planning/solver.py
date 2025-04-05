@@ -1,4 +1,5 @@
 import os
+import time as ti
 import warnings
 warnings.simplefilter("ignore", UserWarning)
 import numpy as np
@@ -219,7 +220,7 @@ class BaseSolver:
          time = time * 1.1
       return trajectory
 
-   def visualize(self, trajectory: np.ndarray, waypoints : np.ndarray, profile : Profile = None, *, actual_path : np.ndarray = None) -> None:
+   def visualize(self, trajectory: np.ndarray, waypoints : np.ndarray = None, profile : Profile = None, *, actual_traj : np.ndarray = None) -> None:
       '''
       Solves and then visualizes the trajectory in 3D.
       '''
@@ -230,14 +231,18 @@ class BaseSolver:
       ax.set_zlim(0,7)
       ax.plot(trajectory[:, 0], trajectory[:, 1], trajectory[:, 2])
       # If an actual path is provided, plot it in blue
-      if actual_path is not None:
-         ax.plot(actual_path[:, 0], actual_path[:, 1], actual_path[:, 2], color='blue', label='Actual Path')
-      points = self._parse_waypoints(waypoints)
-      if(len(points) == 4):
-         x_points, y_points, z_points, yaw_points = points
-      else:
-         x_points, y_points, z_points = points
-      ax.scatter(x_points, y_points, z_points, color='red', label='Waypoints')
+      if actual_traj is not None:
+         ax.plot(actual_traj[:, 0], actual_traj[:, 1], actual_traj[:, 2], color='blue', label='Actual Path')
+      if waypoints is not None:
+         points = self._parse_waypoints(waypoints)
+         if(len(points) == 4):
+            x_points, y_points, z_points, yaw_points = points
+         else:
+            x_points, y_points, z_points = points
+         ax.scatter(x_points, y_points, z_points, color='red', label='Waypoints')
+      if self.waypoints is not None:
+         for waypoint in self.waypoints:
+            ax.scatter(waypoint[0], waypoint[1], waypoint[2], c='g', marker='x')
       # Draw arrow for orientation if available
       if trajectory.shape[1] > 4:
          yaw = trajectory[:, 4]
@@ -247,8 +252,6 @@ class BaseSolver:
       ax.set_ylabel('Y')
       ax.set_zlabel('Z')
       ax.legend()
-      for waypoint in self.waypoints:
-         ax.scatter(waypoint[0], waypoint[1], waypoint[2], c='g', marker='x')
 
       if profile is not None:
          fig1, axs = plt.subplots(3, 3+(isinstance(profile.psi, np.ndarray)), figsize=(10, 6))
@@ -288,9 +291,13 @@ class BaseSolver:
          plt.show()
       except:
          print("Unable to show plot. Saving instead...")
-         fig.savefig('logs/trajectory.png')
+         date_timestamp = ti.strftime('%Y_%m_%d-%H_%M_%S')
+         if not os.path.exists('logs'):
+            os.makedirs('logs')
+         actual = '_actual' if actual_traj is not None else ''
+         fig.savefig(f'logs/trajectory_{date_timestamp}{actual}.png')
          if profile is not None:
-            fig1.savefig('logs/profile.png')
+            fig1.savefig(f'logs/profile_{date_timestamp}{actual}.png')
     
 class CubicSolver(BaseSolver):
    def __init__(self):
@@ -443,7 +450,7 @@ class CasSolver(BaseSolver):
 
       #--- FORMULATE CONSTRAINT PROBLEM ---#
       # Use max distance to approximate time based on 2 m/s avg speed
-      dt = 0.1
+      dt = 0.05
       waypoint_times = np.rint((euclidean_length / kwargs.get("desired_velocity", 2)) / dt).astype(int)
       T = waypoint_times[-1] + 1
       #--- Define optimization variables ---#

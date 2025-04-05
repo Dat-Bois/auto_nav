@@ -5,6 +5,8 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.node import Node
 from .topic_service import Publisher, Subscriber, Client, WallTimer
 
+import time
+import logging
 class RCLPY_Handler:
     def __init__(self, node : str):
         rclpy.init()
@@ -12,20 +14,35 @@ class RCLPY_Handler:
         self.executor = MultiThreadedExecutor()
         self.executor.add_node(self.node)
         self.connected = False
-        self.create_QoS()
+        self.__create_QoS()
+        self.__logger_setup()
 
-    def create_QoS(self):
+    def __create_QoS(self):
         self.qos = qos.QoSProfile(
             reliability=qos.ReliabilityPolicy.BEST_EFFORT, 
             durability=qos.DurabilityPolicy.VOLATILE, 
             depth=1
         )
 
+    def __logger_setup(self):
+        date_timestamp = time.strftime('%Y_%m_%d-%H_%M_%S')
+        logging.basicConfig(
+            level=logging.DEBUG,
+            filename=f'logs/logs_autonav_{date_timestamp}',
+            format='%(asctime)s %(message)s'
+        )
+        console = logging.StreamHandler()
+        console.setLevel(logging.INFO)
+        self.logger = logging.getLogger('autonav')
+        self.logger.addHandler(console)
+
     def log(self, msg : str):
         self.node.get_logger().info(msg)
+        self.logger.info(msg)
 
     def log_error(self, msg : str):
         self.node.get_logger().error(msg)
+        self.logger.error(msg)
 
     def connect(self):
         self.connected = True

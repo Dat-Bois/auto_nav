@@ -1,6 +1,7 @@
 import os
 import time
 import numpy as np
+from pathlib import Path
 from auto_nav import CasSolver, QPSolver, MAVROS_API, RCLPY_Handler, Euler, Quaternion, Planner
 
 SIM = os.getenv('RUN_SIM', False)
@@ -15,27 +16,35 @@ if __name__ == '__main__':
     # api.disconnect()
     # exit(0)
 
-    api.set_gp_origin(-35.3632621, 149.1652374, 10.0)
+    api.set_gp_origin(24.41526617, 54.44013134, 10.0)
 
-    api.arm()
+    if not api.wait_for_arm():
+        api.log("Failed to arm the drone. Exiting...")
+        api.disconnect()
+        exit(1)
+
     api.takeoff(1, blocking=True)
     
-    api.log("Solving trajectory...")
-    waypoints = np.array([
-      [20,10,1.45],
-      [32,12,1.45],
-      [20,16,1.45],
-      [14, 14, 1.45],
-      [20,10,1.45]
-   ])
+    if Path("temp/trajectory.npy").is_file():
+        api.log("Loading trajectory from file...")
+        traj = np.load("temp/trajectory.npy", allow_pickle=True)
+    else:
+        api.log("Solving trajectory...")
+        waypoints = np.array([
+        [20,10,1.45],
+        [32,12,1.45],
+        [20,16,1.45],
+        [14, 14, 1.45],
+        [20,10,1.45]
+    ])
 
-    solver = CasSolver()
-    planner = Planner(waypoints, solver)
-    planner.set_hard_constraints(max_velocity=2, max_acceleration=3, max_tolerance=0.2)
-    new_state = api.get_DroneState()
-    planner.update_state(state = new_state)
-    traj = planner.plan_global()
-    #--------------------------------
+        solver = CasSolver()
+        planner = Planner(waypoints, solver)
+        planner.set_hard_constraints(max_velocity=2, max_acceleration=3, max_tolerance=0.2)
+        new_state = api.get_DroneState()
+        planner.update_state(state = new_state)
+        traj = planner.plan_global()
+    #-------------------------------
     profile = solver.profile(traj)
     # solver.visualize(traj, waypoints, profile)
     if traj is None:
@@ -60,7 +69,6 @@ if __name__ == '__main__':
         So you give the setpoint of the next timestep, but wait the current timestep.
         '''
         api.set_full_setpoint(vxyz=step[1][:3], axyz=step[2][:3]) #, yaw_rate=step[1][4]
-        # api.set_velocity(step[1][0], step[1][1], step[1][2]) #, yaw_rate=step[1][4])
         if i < len(velocities) - 1:
             # sleep = step[1][3] - velocities[i-1][3]
             sleep = velocities[i+1][3] - step[1][3]
@@ -74,7 +82,7 @@ if __name__ == '__main__':
 
     api.log("Finished...")
     api.set_velocity(0, 0, 0, 0)
-    # solver.visualize(traj, waypoints, actual_path=profile.get_actual_path())
+    solver.visualize(traj, waypoints, actual_traj=profile.get_actual_path())
     # time.sleep(10)
     api.land(at_home=SIM, blocking=True)
     api.disconnect()

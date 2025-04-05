@@ -320,6 +320,23 @@ class MAVROS_API:
         self.log("Motors armed!")
 
     @_connected
+    def wait_for_arm(self, timeout: int = 30):
+        '''
+        Waits for the drone to be armed.
+        Returns True if armed, False if timeout reached.
+        '''
+        self.log("Waiting for drone to be armed ...")
+        start = time.time()
+        while not self.armed and (time.time() - start) < timeout:
+            time.sleep(0.5)
+        if self.armed:
+            self.log("Drone is armed!")
+            return True
+        else:
+            self.log("Timeout reached. Drone not armed.")
+            return False
+            
+    @_connected
     def disarm(self):
         '''
         Disarms the drone.
