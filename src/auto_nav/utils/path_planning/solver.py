@@ -374,7 +374,7 @@ class QPSolver(BaseSolver):
 
       #--- FORMULATE QP PROBLEM ---#
       # Use max distance to approximate time based on 2 m/s avg speed
-      dt = 0.1
+      dt = 0.05
       waypoint_times = np.rint((euclidean_length / 2) / dt).astype(int)
       T = waypoint_times[-1] + 1
       #--- Define optimization variables ---#
@@ -413,7 +413,7 @@ class QPSolver(BaseSolver):
       #--- Define cost function (acceleration, jerk, snap) ---#
       cost = cp.sum_squares(A)
       cost += cp.sum_squares(J)
-      cost += cp.sum_squares(S)*100 # penalize snap more
+      cost += cp.sum_squares(S)*10 # penalize snap more
       #--- Solve the optimization problem ---#
       problem = cp.Problem(cp.Minimize(cost), constraints)
       try:
