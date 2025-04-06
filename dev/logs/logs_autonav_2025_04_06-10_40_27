@@ -1,0 +1,29 @@
+2025-04-06 10:40:27,637 Starting connection thread ...
+2025-04-06 10:40:27,640 Switching mode to GUIDED ...
+2025-04-06 10:40:27,641 waiting for ROS service: /mavros/set_mode
+2025-04-06 10:40:27,642 rclpy connected!
+2025-04-06 10:40:37,410 ROS service is up: /mavros/set_mode
+2025-04-06 10:40:37,914 waiting for ROS service: /mavros/set_mode
+2025-04-06 10:40:37,916 ROS service is up: /mavros/set_mode
+2025-04-06 10:40:38,419 waiting for ROS service: /mavros/set_mode
+2025-04-06 10:40:38,422 ROS service is up: /mavros/set_mode
+2025-04-06 10:40:38,925 waiting for ROS service: /mavros/set_mode
+2025-04-06 10:40:38,927 ROS service is up: /mavros/set_mode
+2025-04-06 10:40:39,430 waiting for ROS service: /mavros/set_mode
+2025-04-06 10:40:39,432 ROS service is up: /mavros/set_mode
+2025-04-06 10:40:39,935 waiting for ROS service: /mavros/set_mode
+2025-04-06 10:40:39,938 ROS service is up: /mavros/set_mode
+2025-04-06 10:40:40,443 waiting for ROS service: /mavros/set_mode
+2025-04-06 10:40:40,446 ROS service is up: /mavros/set_mode
+2025-04-06 10:40:40,949 waiting for ROS service: /mavros/set_mode
+2025-04-06 10:40:40,951 ROS service is up: /mavros/set_mode
+2025-04-06 10:40:41,454 waiting for ROS service: /mavros/set_mode
+2025-04-06 10:40:41,456 ROS service is up: /mavros/set_mode
+2025-04-06 10:40:41,959 waiting for ROS service: /mavros/set_mode
+2025-04-06 10:40:41,961 ROS service is up: /mavros/set_mode
+2025-04-06 10:40:42,464 waiting for ROS service: /mavros/set_mode
+2025-04-06 10:40:42,467 ROS service is up: /mavros/set_mode
+2025-04-06 10:40:42,969 waiting for ROS service: /mavros/set_mode
+2025-04-06 10:40:42,972 ROS service is up: /mavros/set_mode
+2025-04-06 10:40:43,475 waiting for ROS service: /mavros/set_mode
+2025-04-06 10:40:43,477 ROS service is up: /mavros/set_mode

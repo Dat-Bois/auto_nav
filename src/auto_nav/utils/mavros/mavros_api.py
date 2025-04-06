@@ -372,16 +372,20 @@ class MAVROS_API:
         self.log("Drone is airborne!")
 
     @_armed_connected
-    def takeoff(self, altitude : float, *, blocking : bool = False):
+    def takeoff(self, altitude : float, *, blocking : bool = False, timeout: float = 5):
         '''
         Takes off the drone to the specified altitude.
         '''
         self._takeoff(altitude)
         if blocking:
+            start_time = time.time()
             while self.get_local_pose(as_type="point").z < altitude - 0.1: 
                 self.log(f"Current altitude: {self.get_local_pose(as_type='point').z:.2f} m | Target altitude: {altitude} m")
                 time.sleep(0.1)
-                pass
+                if time.time() - start_time > timeout:
+                    self.log(f"Timed out: {timeout} seconds")
+                    break
+        self.log("Took off")
 
     @_armed_connected
     def land(self, *, at_home : bool = False, blocking : bool = False):

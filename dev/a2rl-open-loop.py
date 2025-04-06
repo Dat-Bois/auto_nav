@@ -7,6 +7,16 @@ from auto_nav import CasSolver, QPSolver, MAVROS_API, RCLPY_Handler, Euler, Quat
 SIM = os.getenv('RUN_SIM', False)
 
 if __name__ == '__main__':
+    #-------------------------------
+    #-- Temp splicing
+    traj = np.load("course/trajectory_pos.npy", allow_pickle=True)
+    traj_yaw = np.load("course/trajectory_yaw.npy", allow_pickle=True)
+    #--
+
+    solver = CasSolver()
+    profile = solver.profile(traj)
+    profile_yaw = solver.profile(traj_yaw)
+    
     handler = RCLPY_Handler("mavros_node")
     api = MAVROS_API(handler, sim=SIM)
     api.connect()
@@ -29,36 +39,6 @@ if __name__ == '__main__':
             exit(1)
 
     api.takeoff(1.4, blocking=True)
-    
-    if Path("temp/trajectory.npy").is_file():
-        api.log("Loading trajectory from file...")
-        traj = np.load("temp/trajectory.npy", allow_pickle=True)
-        waypoints = None
-    else:
-        api.log("Solving trajectory...")
-        waypoints = np.array([
-        [20,10,1.45],
-        [32,12,1.45],
-        [20,16,1.45],
-        [14, 14, 1.45],
-        [20,10,1.45]
-    ])
-
-        solver = CasSolver()
-        planner = Planner(waypoints, solver)
-        planner.set_hard_constraints(max_velocity=2, max_acceleration=3, max_tolerance=0.2)
-        new_state = api.get_DroneState()
-        planner.update_state(state = new_state)
-        traj = planner.plan_global()
-    #-------------------------------
-    #-- Temp splicing
-    traj = np.load("course/trajectory_pos.npy", allow_pickle=True)
-    traj_yaw = np.load("course/trajectory_yaw.npy", allow_pickle=True)
-    #--
-
-    solver = CasSolver()
-    profile = solver.profile(traj)
-    profile_yaw = solver.profile(traj_yaw)
     # solver.visualize(traj, waypoints, profile)
     if traj is None:
         api.log("Trajectory could not be solved")
