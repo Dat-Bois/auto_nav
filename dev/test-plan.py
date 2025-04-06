@@ -22,19 +22,56 @@ if __name__ == "__main__":
       [87.1, 24, 1.45],
       [91, 25, 1.45],
     ])
+    gate_height = 1.4
+    course_start_pos = [14, 25, 1.45, 90]
+    course = np.array([
+        # [8, 22, 1.45, 90],
+        [30, 19, 1.45, 90],
+        [46, 22, 1.45, 90],
+        [63, 20, 4.15, 90], 
+        [85, 18, 4.15, 90],
+        [90, 18, 2.90, 180],
+        [85, 18, 1.45, 270],
+        [68, 13, 1.45, 270],
+        [55, 7, 1.45, 270],
+        [37, 12, 1.45, 270],
+        [19, 7, 1.45, 270],
+        [9,14, 1.45, 0],
+        [8, 22, 1.45, 35],  # Closing the loop back to start
+        # [14, 25, 1.45, 90]
+    ])
 
-    DRONE_START_POS = drag_start_pos
-    WAYPOINTS = drag_race
-    solver = QPSolver()
+    # course_start_pos = [8, 22, gate_height]
+    # course = np.array([
+    #     [14, 25, gate_height],
+    #     [30, 19, gate_height],
+    #     [46, 22, gate_height],
+    #     [63, 20, 4.15], 
+    #     [85, 18, 4.15],
+    #     [90, 18, 2.90],
+    #     [85, 18, gate_height],
+    #     [68, 13, gate_height],
+    #     [55, 7, gate_height],
+    #     [37, 12, gate_height],
+    #     [19, 7, gate_height],
+    #     [9,14, gate_height],
+    #     [8, 22, gate_height]  # Closing the loop back to start
+    # ])
+
+    DRONE_START_POS = course_start_pos
+    WAYPOINTS = course
+    solver = CasSolver()
     planner = Planner(WAYPOINTS, solver)
     planner.set_hard_constraints(max_tolerance=0.1)
     planner.update_state(position=np.array(DRONE_START_POS))
-    traj = planner.plan_global(set_time=10)
+    traj = planner.plan_global()
     profile = solver.profile(traj)
     solver.visualize(traj, WAYPOINTS, profile)
-    np.save("temp/trajectory.npy", traj)
-    time.sleep(1)
+    np.save("course/trajectory_yaw.npy", traj)
+    # time.sleep(1)
     # check loading
-    traj = np.load("temp/trajectory.npy", allow_pickle=True)
-    profile = solver.profile(traj)
+    # traj = np.load("temp/trajectory.npy", allow_pickle=True)
+    # profile = solver.profile(traj)
     print("Trajectory loaded and visualized successfully!")
+
+    

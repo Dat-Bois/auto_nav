@@ -1,0 +1,25 @@
+2025-04-05 22:19:21,097 Starting connection thread ...
+2025-04-05 22:19:21,098 Switching mode to GUIDED ...
+2025-04-05 22:19:21,099 waiting for ROS service: /mavros/set_mode
+2025-04-05 22:19:21,099 rclpy connected!
+2025-04-05 22:19:22,100 ROS service is up: /mavros/set_mode
+2025-04-05 22:19:22,601 Setting GP origin to (-35.3632621, 149.1652374, 10.0) ...
+2025-04-05 22:19:22,602 Running in simulation mode. No arming required.
+2025-04-05 22:19:22,603 Arming motors ...
+2025-04-05 22:19:22,603 waiting for ROS service: /mavros/cmd/arming
+2025-04-05 22:19:22,603 ROS service is up: /mavros/cmd/arming
+2025-04-05 22:19:23,604 waiting for ROS service: /mavros/cmd/arming
+2025-04-05 22:19:23,605 ROS service is up: /mavros/cmd/arming
+2025-04-05 22:19:24,606 waiting for ROS service: /mavros/cmd/arming
+2025-04-05 22:19:24,607 ROS service is up: /mavros/cmd/arming
+2025-04-05 22:19:25,608 waiting for ROS service: /mavros/cmd/arming
+2025-04-05 22:19:25,608 ROS service is up: /mavros/cmd/arming
+2025-04-05 22:19:26,610 waiting for ROS service: /mavros/cmd/arming
+2025-04-05 22:19:26,610 ROS service is up: /mavros/cmd/arming
+2025-04-05 22:19:27,611 waiting for ROS service: /mavros/cmd/arming
+2025-04-05 22:19:27,612 ROS service is up: /mavros/cmd/arming
+2025-04-05 22:19:28,613 Motors armed!
+2025-04-05 22:19:28,614 Taking off ...
+2025-04-05 22:19:28,614 waiting for ROS service: /mavros/cmd/takeoff
+2025-04-05 22:19:28,615 ROS service is up: /mavros/cmd/takeoff
+2025-04-05 22:19:28,615 Drone is airborne!

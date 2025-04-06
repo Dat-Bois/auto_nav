@@ -378,7 +378,10 @@ class MAVROS_API:
         '''
         self._takeoff(altitude)
         if blocking:
-            while self.get_local_pose(as_type="point").z < altitude - 0.1: pass
+            while self.get_local_pose(as_type="point").z < altitude - 0.1: 
+                self.log(f"Current altitude: {self.get_local_pose(as_type='point').z:.2f} m | Target altitude: {altitude} m")
+                time.sleep(0.1)
+                pass
 
     @_armed_connected
     def land(self, *, at_home : bool = False, blocking : bool = False):

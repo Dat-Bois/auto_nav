@@ -100,8 +100,10 @@ class BaseSolver:
 
    def _parse_waypoints(self, waypoints: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
       if not isinstance(waypoints, np.ndarray): waypoints = np.array(waypoints)
-      if (waypoints[0]!=self.current_position).all() and self.current_position is not None:
-         waypoints = np.insert(waypoints, 0, self.current_position, axis=0)
+      if not np.array_equal(waypoints[0],self.current_position) and self.current_position is not None:
+         if waypoints.shape[1] == 4: pose = np.append(self.current_position, self.current_orientation)
+         else: pose = self.current_position
+         waypoints = np.insert(waypoints, 0, pose, axis=0)
       x_points = waypoints[:, 0]
       y_points = waypoints[:, 1]
       z_points = waypoints[:, 2]
@@ -447,7 +449,6 @@ class CasSolver(BaseSolver):
       # Use euclidean dist to parameterize the spline
       euclidean_length = np.cumsum(np.sqrt(np.diff(x_points)**2 + np.diff(y_points)**2 + np.diff(z_points)**2))
       euclidean_length = np.insert(euclidean_length, 0, 0)
-
       #--- FORMULATE CONSTRAINT PROBLEM ---#
       # Use max distance to approximate time based on 2 m/s avg speed
       dt = 0.05
@@ -538,10 +539,10 @@ class CasSolver(BaseSolver):
       cost += ca.sumsqr(J)
       cost += ca.sumsqr(S)
       #--- Yaw cost ---#
-      eps = 1e-6
-      heading_angle = ca.atan2(V[1, :] + eps, V[0, :] + eps)
-      cost += ca.sumsqr(psi - ca.transpose(heading_angle))
-      cost += ca.sumsqr(psi_dot) * 10
+      # eps = 1e-6
+      # heading_angle = ca.atan2(V[1, :] + eps, V[0, :] + eps)
+      # cost += ca.sumsqr(psi - ca.transpose(heading_angle))
+      cost += ca.sumsqr(psi_dot)
       cost += ca.sumsqr(psi_ddot)
       #--- Solve the optimization problem ---#
       optimizer.minimize(cost)

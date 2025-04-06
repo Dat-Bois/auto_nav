@@ -67,8 +67,9 @@ class Planner:
             velocity = np.array([state.lin_vel.x, state.lin_vel.y, state.lin_vel.z, state.ang_vel.z])
             heading = state.euler.yaw
         if position is not None:
-            assert len(position) == 3
-            self.current_position = position
+            assert len(position) == 3 or len(position) == 4
+            self.current_position = position[:3]
+            if len(position) == 4:  heading = position[3] 
         if velocity is not None:
             assert len(velocity) == 4
             self.current_velocity = velocity

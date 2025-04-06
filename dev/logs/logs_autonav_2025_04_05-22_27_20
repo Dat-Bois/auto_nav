@@ -1,0 +1,126 @@
+2025-04-05 22:27:20,585 Starting connection thread ...
+2025-04-05 22:27:20,585 rclpy connected!
+2025-04-05 22:27:20,586 Switching mode to GUIDED ...
+2025-04-05 22:27:20,586 waiting for ROS service: /mavros/set_mode
+2025-04-05 22:27:21,338 ROS service is up: /mavros/set_mode
+2025-04-05 22:27:21,840 Setting GP origin to (-35.3632621, 149.1652374, 10.0) ...
+2025-04-05 22:27:21,840 Running in simulation mode. No arming required.
+2025-04-05 22:27:21,840 Arming motors ...
+2025-04-05 22:27:21,840 Motors armed!
+2025-04-05 22:27:21,841 Loading trajectory from file...
+2025-04-05 22:27:21,842 Trajectory solved!
+2025-04-05 22:27:21,842 Setting initial heading...
+2025-04-05 22:27:21,843 Current heading: 1.7611147175219395 | Target heading: 0.0
+2025-04-05 22:27:21,943 Current heading: 1.7611147175219395 | Target heading: 0.0
+2025-04-05 22:27:22,044 Current heading: 1.7611147175219395 | Target heading: 0.0
+2025-04-05 22:27:22,144 Current heading: 1.68481253931788 | Target heading: 0.0
+2025-04-05 22:27:22,245 Current heading: 1.68481253931788 | Target heading: 0.0
+2025-04-05 22:27:22,345 Current heading: 1.4633624787118777 | Target heading: 0.0
+2025-04-05 22:27:22,446 Current heading: 1.4633624787118777 | Target heading: 0.0
+2025-04-05 22:27:22,547 Current heading: 1.4633624787118777 | Target heading: 0.0
+2025-04-05 22:27:22,648 Current heading: 1.2153383950379233 | Target heading: 0.0
+2025-04-05 22:27:22,748 Current heading: 1.2153383950379233 | Target heading: 0.0
+2025-04-05 22:27:22,849 Current heading: 1.2153383950379233 | Target heading: 0.0
+2025-04-05 22:27:22,950 Current heading: 0.955393568673406 | Target heading: 0.0
+2025-04-05 22:27:23,051 Current heading: 0.955393568673406 | Target heading: 0.0
+2025-04-05 22:27:23,151 Current heading: 0.6899517933514455 | Target heading: 0.0
+2025-04-05 22:27:23,252 Current heading: 0.6899517933514455 | Target heading: 0.0
+2025-04-05 22:27:23,352 Current heading: 0.6899517933514455 | Target heading: 0.0
+2025-04-05 22:27:23,453 Current heading: 0.4221320907261708 | Target heading: 0.0
+2025-04-05 22:27:23,554 Current heading: 0.4221320907261708 | Target heading: 0.0
+2025-04-05 22:27:23,654 Current heading: 0.1635398427632193 | Target heading: 0.0
+2025-04-05 22:27:23,755 Current heading: 0.1635398427632193 | Target heading: 0.0
+2025-04-05 22:27:23,855 Current heading: 0.1635398427632193 | Target heading: 0.0
+2025-04-05 22:27:23,956 Executing trajectory...
+2025-04-05 22:27:27,425 Setting yaw rate: 0.00 at step 69
+2025-04-05 22:27:27,476 Setting yaw rate: 0.05 at step 70
+2025-04-05 22:27:27,527 Setting yaw rate: 0.10 at step 71
+2025-04-05 22:27:27,578 Setting yaw rate: 0.15 at step 72
+2025-04-05 22:27:27,629 Setting yaw rate: 0.20 at step 73
+2025-04-05 22:27:27,679 Setting yaw rate: 0.25 at step 74
+2025-04-05 22:27:27,730 Setting yaw rate: 0.30 at step 75
+2025-04-05 22:27:27,781 Setting yaw rate: 0.35 at step 76
+2025-04-05 22:27:27,832 Setting yaw rate: 0.40 at step 77
+2025-04-05 22:27:27,883 Setting yaw rate: 0.45 at step 78
+2025-04-05 22:27:27,934 Setting yaw rate: 0.50 at step 79
+2025-04-05 22:27:27,984 Setting yaw rate: 0.55 at step 80
+2025-04-05 22:27:28,035 Setting yaw rate: 0.60 at step 81
+2025-04-05 22:27:28,086 Setting yaw rate: 0.65 at step 82
+2025-04-05 22:27:28,136 Setting yaw rate: 0.70 at step 83
+2025-04-05 22:27:28,187 Setting yaw rate: 0.75 at step 84
+2025-04-05 22:27:28,238 Setting yaw rate: 0.80 at step 85
+2025-04-05 22:27:28,289 Setting yaw rate: 0.85 at step 86
+2025-04-05 22:27:28,339 Setting yaw rate: 0.90 at step 87
+2025-04-05 22:27:28,390 Setting yaw rate: 0.95 at step 88
+2025-04-05 22:27:28,441 Setting yaw rate: 1.00 at step 89
+2025-04-05 22:27:28,492 Setting yaw rate: 1.05 at step 90
+2025-04-05 22:27:28,542 Setting yaw rate: 1.10 at step 91
+2025-04-05 22:27:28,593 Setting yaw rate: 1.15 at step 92
+2025-04-05 22:27:28,644 Setting yaw rate: 1.20 at step 93
+2025-04-05 22:27:28,696 Setting yaw rate: 1.25 at step 94
+2025-04-05 22:27:28,746 Setting yaw rate: 1.30 at step 95
+2025-04-05 22:27:28,797 Setting yaw rate: 1.35 at step 96
+2025-04-05 22:27:28,848 Setting yaw rate: 1.40 at step 97
+2025-04-05 22:27:28,898 Setting yaw rate: 1.45 at step 98
+2025-04-05 22:27:28,949 Setting yaw rate: 1.50 at step 99
+2025-04-05 22:27:29,001 Setting yaw rate: 1.55 at step 100
+2025-04-05 22:27:29,051 Setting yaw rate: 1.60 at step 101
+2025-04-05 22:27:29,102 Setting yaw rate: 1.65 at step 102
+2025-04-05 22:27:29,153 Setting yaw rate: 1.70 at step 103
+2025-04-05 22:27:29,204 Setting yaw rate: 1.75 at step 104
+2025-04-05 22:27:29,255 Setting yaw rate: 1.80 at step 105
+2025-04-05 22:27:29,305 Setting yaw rate: 1.85 at step 106
+2025-04-05 22:27:29,356 Setting yaw rate: 1.90 at step 107
+2025-04-05 22:27:29,407 Setting yaw rate: 1.95 at step 108
+2025-04-05 22:27:29,458 Setting yaw rate: 2.00 at step 109
+2025-04-05 22:27:29,508 Setting yaw rate: 2.05 at step 110
+2025-04-05 22:27:29,559 Setting yaw rate: 2.10 at step 111
+2025-04-05 22:27:29,610 Setting yaw rate: 2.15 at step 112
+2025-04-05 22:27:29,661 Setting yaw rate: 2.20 at step 113
+2025-04-05 22:27:29,712 Setting yaw rate: 2.25 at step 114
+2025-04-05 22:27:29,762 Setting yaw rate: 2.30 at step 115
+2025-04-05 22:27:29,813 Setting yaw rate: 2.35 at step 116
+2025-04-05 22:27:29,864 Setting yaw rate: 2.40 at step 117
+2025-04-05 22:27:29,915 Setting yaw rate: 2.45 at step 118
+2025-04-05 22:27:29,966 Setting yaw rate: 2.50 at step 119
+2025-04-05 22:27:30,017 Setting yaw rate: 2.55 at step 120
+2025-04-05 22:27:30,067 Setting yaw rate: 2.60 at step 121
+2025-04-05 22:27:30,118 Setting yaw rate: 2.65 at step 122
+2025-04-05 22:27:30,170 Setting yaw rate: 2.70 at step 123
+2025-04-05 22:27:30,220 Setting yaw rate: 2.75 at step 124
+2025-04-05 22:27:30,271 Setting yaw rate: 2.80 at step 125
+2025-04-05 22:27:30,322 Setting yaw rate: 2.85 at step 126
+2025-04-05 22:27:30,373 Setting yaw rate: 2.90 at step 127
+2025-04-05 22:27:30,423 Setting yaw rate: 2.95 at step 128
+2025-04-05 22:27:30,474 Setting yaw rate: 3.00 at step 129
+2025-04-05 22:27:30,525 Setting yaw rate: 3.05 at step 130
+2025-04-05 22:27:30,576 Setting yaw rate: 3.10 at step 131
+2025-04-05 22:27:30,627 Setting yaw rate: 3.15 at step 132
+2025-04-05 22:27:30,677 Setting yaw rate: 3.20 at step 133
+2025-04-05 22:27:30,728 Setting yaw rate: 3.25 at step 134
+2025-04-05 22:27:30,779 Setting yaw rate: 3.30 at step 135
+2025-04-05 22:27:30,830 Setting yaw rate: 3.35 at step 136
+2025-04-05 22:27:30,880 Setting yaw rate: 3.40 at step 137
+2025-04-05 22:27:30,931 Setting yaw rate: 3.45 at step 138
+2025-04-05 22:27:30,982 Setting yaw rate: 3.50 at step 139
+2025-04-05 22:27:31,033 Setting yaw rate: 3.55 at step 140
+2025-04-05 22:27:31,084 Setting yaw rate: 3.60 at step 141
+2025-04-05 22:27:31,135 Setting yaw rate: 3.65 at step 142
+2025-04-05 22:27:31,185 Setting yaw rate: 3.70 at step 143
+2025-04-05 22:27:31,236 Setting yaw rate: 3.75 at step 144
+2025-04-05 22:27:31,287 Setting yaw rate: 3.80 at step 145
+2025-04-05 22:27:31,338 Setting yaw rate: 3.85 at step 146
+2025-04-05 22:27:31,388 Setting yaw rate: 3.90 at step 147
+2025-04-05 22:27:31,439 Setting yaw rate: 3.95 at step 148
+2025-04-05 22:27:31,490 Setting yaw rate: 4.00 at step 149
+2025-04-05 22:27:31,541 Setting yaw rate: 4.05 at step 150
+2025-04-05 22:27:31,591 Setting yaw rate: 4.10 at step 151
+2025-04-05 22:27:31,642 Setting yaw rate: 4.15 at step 152
+2025-04-05 22:27:31,693 Setting yaw rate: 4.20 at step 153
+2025-04-05 22:27:31,744 Setting yaw rate: 4.25 at step 154
+2025-04-05 22:27:31,795 Setting yaw rate: 4.30 at step 155
+2025-04-05 22:27:31,846 Setting yaw rate: 4.35 at step 156
+2025-04-05 22:27:31,897 Setting yaw rate: 4.40 at step 157
+2025-04-05 22:27:31,947 Setting yaw rate: 4.45 at step 158
+2025-04-05 22:27:31,998 Setting yaw rate: 4.50 at step 159
+2025-04-05 22:27:32,049 Setting yaw rate: 4.55 at step 160

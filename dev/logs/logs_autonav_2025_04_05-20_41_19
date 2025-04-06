@@ -1,0 +1,19 @@
+2025-04-05 20:41:19,814 Starting connection thread ...
+2025-04-05 20:41:19,815 Switching mode to GUIDED ...
+2025-04-05 20:41:19,816 rclpy connected!
+2025-04-05 20:41:19,816 waiting for ROS service: /mavros/set_mode
+2025-04-05 20:41:20,819 ROS service is up: /mavros/set_mode
+2025-04-05 20:41:21,321 Setting GP origin to (-35.3632621, 149.1652374, 10.0) ...
+2025-04-05 20:41:21,321 Running in simulation mode. No arming required.
+2025-04-05 20:41:21,321 Arming motors ...
+2025-04-05 20:41:21,321 waiting for ROS service: /mavros/cmd/arming
+2025-04-05 20:41:21,322 ROS service is up: /mavros/cmd/arming
+2025-04-05 20:41:22,323 waiting for ROS service: /mavros/cmd/arming
+2025-04-05 20:41:22,324 ROS service is up: /mavros/cmd/arming
+2025-04-05 20:41:23,324 waiting for ROS service: /mavros/cmd/arming
+2025-04-05 20:41:23,325 ROS service is up: /mavros/cmd/arming
+2025-04-05 20:41:24,325 waiting for ROS service: /mavros/cmd/arming
+2025-04-05 20:41:24,326 ROS service is up: /mavros/cmd/arming
+2025-04-05 20:41:25,327 waiting for ROS service: /mavros/cmd/arming
+2025-04-05 20:41:25,328 ROS service is up: /mavros/cmd/arming
+2025-04-05 20:41:26,330 waiting for ROS service: /mavros/cmd/arming
