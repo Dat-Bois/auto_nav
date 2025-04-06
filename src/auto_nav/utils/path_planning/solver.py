@@ -191,13 +191,19 @@ class BaseSolver:
          return Profile(T, velocity, acceleration, jerk, snap, yaw, yaw_dot, yaw_ddot, bv)
       return Profile(T, velocity, acceleration, jerk, snap)
    
-   def temporal_scale(self, trajectory: np.ndarray, max_time = None) -> np.ndarray:
+   def temporal_scale(self, trajectory: np.ndarray, *, set_time = None, max_time = None) -> np.ndarray:
       '''
       Scales the trajectory in time to meet the constraints.
       DOES NOT WORK FOR CASADI SOLVER----
       '''
       if trajectory is None:
          return None
+      if set_time is not None:
+         time_var = trajectory[:, 3]
+         multiplier = set_time / time_var[-1]
+         time_var = time_var * multiplier
+         trajectory[:, 3] = time_var
+         return trajectory
       # if trajectory.shape[1] > 4:
       #    print("Temporal scaling not implemented for casadi solver.")
       #    return trajectory

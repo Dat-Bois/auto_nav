@@ -12,6 +12,10 @@ if __name__ == '__main__':
     traj = np.load("course/trajectory_pos.npy", allow_pickle=True)
     traj_yaw = np.load("course/trajectory_yaw.npy", allow_pickle=True)
     waypoints = None
+
+    #temp scale
+    traj = CasSolver().temporal_scale(traj, set_time=90)
+    traj_yaw = CasSolver().temporal_scale(traj_yaw, set_time=90)
     #--
 
     solver = CasSolver()
