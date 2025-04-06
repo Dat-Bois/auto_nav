@@ -85,7 +85,7 @@ if __name__ == '__main__':
         if i < 69: api.set_full_setpoint(pxyz=step[0][:3], vxyz=step[1][:3], axyz=step[2][:3], yaw_rate=0)
         else: 
             api.set_full_setpoint(pxyz=step[0][:3], vxyz=step[1][:3], axyz=step[2][:3], yaw_rate=yaw_vel[i-69][4])
-            api.log(f"Setting yaw rate: {yaw_vel[i-69][3]:.2f} at step {i}")
+            api.log(f"Setting yaw rate: {yaw_vel[i-69][4]:.2f} at step {i}")
         if i < len(velocities) - 1:
             # sleep = step[1][3] - velocities[i-1][3]
             sleep = velocities[i+1][3] - step[1][3]
