@@ -189,7 +189,7 @@ class MAVROS_API:
         return (data.latitude, data.longitude, data.altitude, alt.data)
 
     @_connected
-    def get_local_pose(self, *, as_type : str = None, ground_truth : bool = False) -> Tuple[Point, Quaternion, Euler] | Point | Quaternion | Euler:
+    def get_local_pose(self, *, as_type : str = None, ground_truth : bool = False) -> Tuple[Point, Quaternion, Euler] | Point | Quaternion | Euler | None:
         '''
         Returns three objects: one XYZ, one Quaternion, one Euler.
         ((x, y, z), (x, y, z, w), (roll, pitch, yaw))
@@ -379,9 +379,14 @@ class MAVROS_API:
         self._takeoff(altitude)
         if blocking:
             start_time = time.time()
-            while self.get_local_pose(as_type="point").z < altitude - 0.1: 
-                self.log(f"Current altitude: {self.get_local_pose(as_type='point').z:.2f} m | Target altitude: {altitude} m")
-                time.sleep(0.1)
+            while True: 
+                pose = self.get_local_pose(as_type="point")
+                if pose is not None:
+                    if pose.z >= altitude - 0.1:  # Allow a small tolerance
+                        self.log(f"Reached target altitude: {pose.z:.2f} m")
+                        break
+                    self.log(f"Current altitude: {pose.z:.2f} m | Target altitude: {altitude} m")
+                    time.sleep(0.1)
                 if time.time() - start_time > timeout:
                     self.log(f"Timed out: {timeout} seconds")
                     break

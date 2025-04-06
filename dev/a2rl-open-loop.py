@@ -11,6 +11,7 @@ if __name__ == '__main__':
     #-- Temp splicing
     traj = np.load("course/trajectory_pos.npy", allow_pickle=True)
     traj_yaw = np.load("course/trajectory_yaw.npy", allow_pickle=True)
+    waypoints = None
     #--
 
     solver = CasSolver()
@@ -26,19 +27,19 @@ if __name__ == '__main__':
     # api.disconnect()
     # exit(0)
 
-
     if SIM:
         api.set_gp_origin(-35.3632621, 149.1652374, 10.0)
         api.log("Running in simulation mode. No arming required.")
         api.arm()
     else:
         api.set_gp_origin(24.41526617, 54.44013134, 10.0)
-        if not api.wait_for_arm():
-            api.log("Failed to arm the drone. Exiting...")
-            api.disconnect()
-            exit(1)
+        # if not api.wait_for_arm():
+        #     api.log("Failed to arm the drone. Exiting...")
+        #     api.disconnect()
+        #     exit(1)
+        api.arm()
 
-    api.takeoff(1.4, blocking=True)
+    api.takeoff(1.4, blocking=True, timeout=10)
     # solver.visualize(traj, waypoints, profile)
     if traj is None:
         api.log("Trajectory could not be solved")
@@ -55,6 +56,7 @@ if __name__ == '__main__':
     yaw_vel = profile_yaw.get_velocity()  # Get yaw velocities
     accels = profile.get_acceleration()
     # x y z t yr
+    prev_rate = 0
     for i, step in enumerate(zip(traj, velocities, accels)):
         # api.set_velocity(step[0], step[1], step[2], step[4])
         '''Ok logically at a timestep what needs to happen:
@@ -62,10 +64,16 @@ if __name__ == '__main__':
         2. But the assumption is you aren't there, you are at the previous timestep. 
         So you give the setpoint of the next timestep, but wait the current timestep.
         '''
-        if i < 69: api.set_full_setpoint(pxyz=step[0][:3], vxyz=step[1][:3], axyz=step[2][:3], yaw_rate=0)
-        else: 
-            api.set_full_setpoint(pxyz=step[0][:3], vxyz=step[1][:3], axyz=step[2][:3], yaw_rate=yaw_vel[i-69][4])
-            api.log(f"Setting yaw rate: {yaw_vel[i-69][4]:.2f} at step {i}")
+        if i < 69: 
+            yaw_rate = 0
+        else:
+            try:
+                yaw_rate = yaw_vel[i-69][4]
+            except:
+                yaw_rate = prev_rate
+        prev_rate = yaw_rate
+        api.set_full_setpoint(pxyz=step[0][:3], vxyz=step[1][:3], axyz=step[2][:3], yaw_rate=yaw_rate)
+        api.log(f"Time: {time.time()} | Step {i}: pos={step[0][:3]}, vel={step[1][:3]}, accel={step[2][:3]}, yaw_rate={yaw_rate:.2f}")
         if i < len(velocities) - 1:
             # sleep = step[1][3] - velocities[i-1][3]
             sleep = velocities[i+1][3] - step[1][3]
@@ -80,6 +88,8 @@ if __name__ == '__main__':
     api.log("Finished...")
     api.set_velocity(0, 0, 0, 0)
     solver.visualize(traj, waypoints, actual_traj=profile.get_actual_path())
+    timestmp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
+    np.save(f"course/actual_trajectory_pos_{timestmp}.npy", profile.get_actual_path(), allow_pickle=True)
     # time.sleep(10)
     api.land(at_home=SIM, blocking=True)
     api.disconnect()

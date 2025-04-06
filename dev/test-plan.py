@@ -26,8 +26,11 @@ if __name__ == "__main__":
     course_start_pos = [14, 25, 1.45, 90]
     course = np.array([
         # [8, 22, 1.45, 90],
+        # [20, 22, gate_height, 90], # extra to ensure point is in front of gate
         [30, 19, 1.45, 90],
         [46, 22, 1.45, 90],
+        # [47, 22, gate_height+0.2, 90], # extra to ensure lower height
+        # [57, 20, 3.9, 90], # extra to ensure height
         [63, 20, 4.15, 90], 
         [85, 18, 4.15, 90],
         [90, 18, 2.90, 180],
@@ -44,8 +47,11 @@ if __name__ == "__main__":
     # course_start_pos = [8, 22, gate_height]
     # course = np.array([
     #     [14, 25, gate_height],
+    #     [20, 22, gate_height], # extra to ensure point is in front of gate
     #     [30, 19, gate_height],
     #     [46, 22, gate_height],
+    #     [47, 22, gate_height+0.2], # extra to ensure lower height
+    #     [57, 20, 3.9], # extra to ensure height
     #     [63, 20, 4.15], 
     #     [85, 18, 4.15],
     #     [90, 18, 2.90],
