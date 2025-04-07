@@ -665,17 +665,17 @@ class MAVROS_API:
         data = FullSetpoint()
         data.header.stamp = self.handler.get_time()
         data.type_mask = typemask
-        data.position.x = pxyz[0]
-        data.position.y = pxyz[1]
-        data.position.z = pxyz[2]
-        data.velocity.x = vxyz[0]
-        data.velocity.y = vxyz[1]
-        data.velocity.z = vxyz[2]
-        data.acceleration.x = axyz[0]
-        data.acceleration.y = axyz[1]
-        data.acceleration.z = axyz[2]
-        data.yaw = yaw
-        data.yaw_rate = yaw_rate
+        data.position.x = float(pxyz[0])
+        data.position.y = float(pxyz[1])
+        data.position.z = float(pxyz[2])
+        data.velocity.x = float(vxyz[0])
+        data.velocity.y = float(vxyz[1])
+        data.velocity.z = float(vxyz[2])
+        data.acceleration.x = float(axyz[0])
+        data.acceleration.y = float(axyz[1])
+        data.acceleration.z = float(axyz[2])
+        data.yaw = float(yaw)
+        data.yaw_rate = float(yaw_rate)
         self.handler.publish_topic(PUB_SET_FULL, data)
 
     @_connected
