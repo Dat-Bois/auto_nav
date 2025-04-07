@@ -22,7 +22,7 @@ def wp_inline_with_gate(gate, distance, invert_yaw = False):
 
 gates = APRIL_GATE_LOCATIONS
 path = [
-    wp_inline_with_gate(gates[1], -2), # gate 2
+    wp_inline_with_gate(gates[1], -5), # gate 2
     (*wp_inline_with_gate(gates[1], 2)[:3], gates[2][3]), # gate 2
     wp_inline_with_gate(gates[2], -5), # gate 3
     (*wp_inline_with_gate(gates[2], 2)[:3], gates[3][3]), # gate 3
