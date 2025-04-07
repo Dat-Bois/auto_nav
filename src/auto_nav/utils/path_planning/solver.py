@@ -391,6 +391,9 @@ class QPSolver(BaseSolver):
       A = cp.Variable((3, T))  # Acceleration
       J = cp.Variable((3, T))  # Jerk
       S = cp.Variable((3, T))  # Snap
+      psi = cp.Variable(T)
+      psid = cp.Variable(T)
+      psidd = cp.Variable(T)
       #--- Define initial conditions ---#
       x0, y0, z0 = x_points[0], y_points[0], z_points[0]
       constraints = [X[:, 0] == np.array([x0, y0, z0])]
@@ -496,6 +499,11 @@ class CasSolver(BaseSolver):
          optimizer.subject_to(psi[t+1] == psi[t] + psi_dot[t] * dt + 0.5 * psi_ddot[t] * dt**2)
          optimizer.subject_to(psi_dot[t+1] == psi_dot[t] + psi_ddot[t] * dt)
       #--- Velocity and acceleration limits ---#
+      # Pos Contraints #TODO: Implement corrdior constraints
+      if kwargs.get("min_height", None) is not None:
+         print("Min Height set: ", kwargs.get("min_height"))
+         optimizer.subject_to(X[2,:] >= kwargs.get("min_height"))
+
       # Velocity constraints
       if self.max_velocity is not None:
          optimizer.subject_to(-self.max_velocity <= V[0, :])

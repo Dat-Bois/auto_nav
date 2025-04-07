@@ -128,7 +128,7 @@ class Planner:
         print(v_des)
         return v_des
 
-    def plan_global(self, *, waypoints : np.ndarray | None = None, max_time: float | None = None, set_time: float | None = None):
+    def plan_global(self, *, waypoints : np.ndarray | None = None, max_time: float | None = None, set_time: float | None = None, **kwargs):
         '''
         Plan a global trajectory. Max time is the maximum time the trajectory can take.
         Returns a trajectory.
@@ -137,13 +137,13 @@ class Planner:
             waypoints = self.waypoints
         if waypoints is None:
             raise ValueError('No waypoints provided')
-        traj = self.solver.solve(self.current_position, waypoints, self.current_velocity, self.current_orientation)
+        traj = self.solver.solve(self.current_position, waypoints, self.current_velocity, self.current_orientation, **kwargs)
         if traj is None:
             print('***Trajectory could not be solved, applying temporal scaling...***')
             # Relax constraints and replan, but save the original constraints and then reapply them for temporal scaling
             constraints = self.solver.get_hard_constraints()
             self.set_hard_constraints(constraints = {})
-            traj = self.solver.solve(self.current_position, waypoints, self.current_velocity, self.current_orientation)
+            traj = self.solver.solve(self.current_position, waypoints, self.current_velocity, self.current_orientation, **kwargs)
             self.set_hard_constraints(constraints = constraints)
             if set_time is not None:
                 time_var = traj[:, 3]

@@ -1,0 +1,25 @@
+2025-04-06 18:37:56,875 Starting connection thread ...
+2025-04-06 18:37:56,876 Switching mode to GUIDED ...
+2025-04-06 18:37:56,877 waiting for ROS service: /mavros/set_mode
+2025-04-06 18:37:56,878 rclpy connected!
+2025-04-06 18:38:04,154 ROS service is up: /mavros/set_mode
+2025-04-06 18:38:04,656 waiting for ROS service: /mavros/set_mode
+2025-04-06 18:38:04,657 ROS service is up: /mavros/set_mode
+2025-04-06 18:38:05,159 waiting for ROS service: /mavros/set_mode
+2025-04-06 18:38:05,160 ROS service is up: /mavros/set_mode
+2025-04-06 18:38:05,662 waiting for ROS service: /mavros/set_mode
+2025-04-06 18:38:05,663 ROS service is up: /mavros/set_mode
+2025-04-06 18:38:06,165 waiting for ROS service: /mavros/set_mode
+2025-04-06 18:38:06,168 ROS service is up: /mavros/set_mode
+2025-04-06 18:38:06,670 waiting for ROS service: /mavros/set_mode
+2025-04-06 18:38:06,671 ROS service is up: /mavros/set_mode
+2025-04-06 18:38:07,178 Setting GP origin to (24.41526617, 54.44013134, 10.0) ...
+2025-04-06 18:38:07,192 Arming motors ...
+2025-04-06 18:38:07,194 waiting for ROS service: /mavros/cmd/arming
+2025-04-06 18:38:07,196 ROS service is up: /mavros/cmd/arming
+2025-04-06 18:38:08,199 waiting for ROS service: /mavros/cmd/arming
+2025-04-06 18:38:08,200 ROS service is up: /mavros/cmd/arming
+2025-04-06 18:38:09,203 waiting for ROS service: /mavros/cmd/arming
+2025-04-06 18:38:10,524 Drone disarmed externally!
+2025-04-06 18:38:10,525 Exiting ...
+2025-04-06 18:38:10,526 Shutting down rclpy ...
