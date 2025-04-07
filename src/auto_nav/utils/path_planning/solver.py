@@ -125,8 +125,6 @@ class BaseSolver:
          - max_yaw_acceleration : float
          - max_tolerance : float (meters) default 0.2
       '''
-      if kwargs.get('kwargs') is not None:
-         kwargs = kwargs.get('kwargs')
       self.max_velocity = kwargs.get('max_velocity', None)
       self.max_acceleration = kwargs.get('max_acceleration', None)
       self.max_jerk = kwargs.get('max_jerk', None)

@@ -5,8 +5,10 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.node import Node
 from .topic_service import Publisher, Subscriber, Client, WallTimer
 
+import os
 import time
 import logging
+SIM = os.getenv('RUN_SIM', False)
 class RCLPY_Handler:
     def __init__(self, node : str):
         rclpy.init()
@@ -26,9 +28,12 @@ class RCLPY_Handler:
 
     def __logger_setup(self):
         date_timestamp = time.strftime('%Y_%m_%d-%H_%M_%S')
+        if not os.path.exists('logs'):
+            os.makedirs('logs')
+        sim = "sim_" if SIM else ""
         logging.basicConfig(
             level=logging.DEBUG,
-            filename=f'logs/logs_autonav_{date_timestamp}',
+            filename=f'logs/{sim}logs_autonav_{date_timestamp}',
             format='%(asctime)s %(message)s'
         )
         console = logging.StreamHandler()

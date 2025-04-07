@@ -73,7 +73,7 @@ if __name__ == "__main__":
     traj = planner.plan_global(min_height = 1.3)
     profile = solver.profile(traj)
     solver.visualize(traj, WAYPOINTS, profile)
-    np.save("course/trajectory_pos_test.npy", traj)
+    np.save("course/trajectory_pos.npy", traj)
     # time.sleep(1)
     # check loading
     # traj = np.load("temp/trajectory.npy", allow_pickle=True)

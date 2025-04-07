@@ -50,9 +50,9 @@ class Planner:
         Set hard constraints for the solver.
         '''
         if constraints is not None:
-            self.solver.set_hard_constraints(kwargs = constraints)
+            self.solver.set_hard_constraints(**constraints)
         else:
-            self.solver.set_hard_constraints(kwargs = kwargs)
+            self.solver.set_hard_constraints(**kwargs)
 
     def update_state(self, *,   position : np.ndarray | None = None, 
                                 velocity : np.ndarray | None = None, 
