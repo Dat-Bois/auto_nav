@@ -64,6 +64,13 @@ if __name__ == "__main__":
         [8, 22, gate_height]  # Closing the loop back to start
     ])
 
+    course_start_pos = [8, 22, gate_height]
+    course = np.array([
+        [14, 25, gate_height],
+        [18, 23, gate_height], # extra to ensure point is in front of gate
+        [20, 19, gate_height], # extra to ensure point is in front of gate
+    ])
+
     DRONE_START_POS = course_start_pos
     WAYPOINTS = course
     solver = CasSolver()
@@ -71,9 +78,10 @@ if __name__ == "__main__":
     planner.set_hard_constraints(max_tolerance=0.1)
     planner.update_state(position=np.array(DRONE_START_POS))
     traj = planner.plan_global(min_height = 1.3)
+    # traj = CasSolver().temporal_scale(traj, set_time=15)
     profile = solver.profile(traj)
     solver.visualize(traj, WAYPOINTS, profile)
-    np.save("course/trajectory_pos.npy", traj)
+    np.save("course/trajectory_pos_test.npy", traj)
     # time.sleep(1)
     # check loading
     # traj = np.load("temp/trajectory.npy", allow_pickle=True)

@@ -24,7 +24,7 @@ gates = APRIL_GATE_LOCATIONS
 path = [
     wp_inline_with_gate(gates[1], -2), # gate 2
     (*wp_inline_with_gate(gates[1], 2)[:3], gates[2][3]), # gate 2
-    wp_inline_with_gate(gates[2], -2), # gate 3
+    wp_inline_with_gate(gates[2], -5), # gate 3
     (*wp_inline_with_gate(gates[2], 2)[:3], gates[3][3]), # gate 3
     wp_inline_with_gate(gates[4], -2), # DG1 top
     wp_inline_with_gate(gates[4], 1), # DG1 top
@@ -49,12 +49,12 @@ path = np.array(path)
 if __name__ == '__main__':
     #-------------------------------
     #-- Temp splicing
-    traj = np.load("course/trajectory_pos.npy", allow_pickle=True)
+    traj = np.load("course/trajectory_pos_test.npy", allow_pickle=True)
     traj_yaw = np.load("course/trajectory_yaw.npy", allow_pickle=True)
     waypoints = None
 
     #temp scale
-    traj = CasSolver().temporal_scale(traj, set_time=120)
+    traj = CasSolver().temporal_scale(traj, set_time=15)
     traj_yaw = CasSolver().temporal_scale(traj_yaw, set_time=120)
     #--
 
@@ -132,12 +132,12 @@ if __name__ == '__main__':
             if pt is not None:
                 profile.save_point(np.array([pt.x, pt.y, pt.z]))
         
-        # Exit early after first gate
-        pt = api.get_local_pose(as_type="point")
-        if pt is not None:
-            if pt.x >= 18:
-                api.log("Finished the first gate, exiting early...")
-                break
+        # # Exit early after first gate
+        # pt = api.get_local_pose(as_type="point")
+        # if pt is not None:
+        #     if pt.x >= 18:
+        #         api.log("Finished the first gate, exiting early...")
+        #         break
     
     for target in path:
         while True:
