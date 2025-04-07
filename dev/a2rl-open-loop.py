@@ -76,6 +76,8 @@ if __name__ == '__main__':
             except:
                 yaw_rate = prev_rate
         prev_rate = yaw_rate
+        step[1][:3][2] = np.nan # no vertical velocity setpoint
+        step[2][:3][2] = np.nan # no vertical accel setpoint
         api.set_full_setpoint(pxyz=step[0][:3], vxyz=step[1][:3], axyz=step[2][:3], yaw_rate=yaw_rate)
         api.log(f"Time: {time.time()} | Step {i}: pos={step[0][:3]}, vel={step[1][:3]}, accel={step[2][:3]}, yaw_rate={yaw_rate:.2f}")
         if i < len(velocities) - 1:
