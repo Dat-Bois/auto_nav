@@ -54,7 +54,7 @@ if __name__ == '__main__':
     waypoints = None
 
     #temp scale
-    traj = CasSolver().temporal_scale(traj, set_time=15)
+    traj = CasSolver().temporal_scale(traj, set_time=20)
     traj_yaw = CasSolver().temporal_scale(traj_yaw, set_time=120)
     #--
 

@@ -501,6 +501,14 @@ class CasSolver(BaseSolver):
       if kwargs.get("min_height", None) is not None:
          print("Min Height set: ", kwargs.get("min_height"))
          optimizer.subject_to(X[2,:] >= kwargs.get("min_height"))
+      if kwargs.get("slow_at_end", False):
+         print("Slow at end set")
+         optimizer.subject_to(V[0, -1] <= 0.3)
+         optimizer.subject_to(V[0, -1] >= -0.3)
+         optimizer.subject_to(V[1, -1] <= 0.3)
+         optimizer.subject_to(V[1, -1] >= -0.3)
+         optimizer.subject_to(V[2, -1] <= 0.5)
+         optimizer.subject_to(V[2, -1] >= -0.5)
 
       # Velocity constraints
       if self.max_velocity is not None:
