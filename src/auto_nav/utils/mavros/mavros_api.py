@@ -655,7 +655,7 @@ class MAVROS_API:
                                 yaw: float = None, yaw_rate : float = None, *, typemask : int = None):
         '''
         Sets the full setpoint of the drone.
-        NEED TO TEST
+        WORKS
         '''
         new_typemask, pxyz, vxyz, axyz, yaw, yaw_rate = self._build_setpoint_typemask(pxyz, vxyz, axyz, yaw, yaw_rate)
         if typemask == None:
