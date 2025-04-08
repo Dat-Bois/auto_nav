@@ -360,6 +360,17 @@ class MAVROS_API:
             time.sleep(0.5)
         if res: self.log(f"Mode switched to {mode}!")
 
+    @_connected
+    def wait_for_mode(self, mode : str):
+        '''
+        Waits for the drone to be in the specified mode.
+        '''
+        self.log(f"Waiting for drone to be switched into {mode.upper()}...")
+        while self.mode != mode.upper():
+            self.log("Waiting...")
+            time.sleep(1)
+        self.log(f"Drone is in {mode.upper()} mode!")
+
     @_armed_connected
     def _takeoff(self, altitude : float):
         '''
@@ -419,7 +430,7 @@ class MAVROS_API:
         self.log("Home position set!")
 
     @_connected
-    def set_steam_rate(self, stream_id : int, rate : int, on_off : bool):
+    def set_steam_rate(self, stream_id : int, rate : int, on_off : bool, *, timeout=5):
         '''
         Sets the stream rate of a specific stream.
         '''
@@ -428,7 +439,7 @@ class MAVROS_API:
         data.message_rate = rate
         data.on_off = on_off
         self.log(f"Setting stream rate for stream {stream_id} ...")
-        self.handler.send_service_request(CLI_SET_STREAM_RATE, data)
+        self.handler.send_service_request(CLI_SET_STREAM_RATE, data, timeout=timeout)
         self.log(f"Stream rate set for stream {stream_id}!")
 
     @_connected

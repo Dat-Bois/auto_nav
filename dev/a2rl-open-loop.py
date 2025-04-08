@@ -65,13 +65,18 @@ if __name__ == '__main__':
     handler = RCLPY_Handler("mavros_node")
     api = MAVROS_API(handler, sim=SIM)
     api.connect()
-    api.set_mode("GUIDED")
+
+    # Set streamrate for local pose messages
+    api.set_steam_rate(0, 30, True)
+    while api.get_local_pose() is None:
+        api.set_steam_rate(0, 30, True)
 
     # api.land(at_home=True, blocking=True)
     # api.disconnect()
     # exit(0)
 
     if SIM:
+        api.set_mode("GUIDED")
         api.set_gp_origin(-35.3632621, 149.1652374, 10.0)
         api.log("Running in simulation mode. No arming required.")
         api.arm()
@@ -81,9 +86,11 @@ if __name__ == '__main__':
         #     api.log("Failed to arm the drone. Exiting...")
         #     api.disconnect()
         #     exit(1)
+        api.wait_for_mode("GUIDED")
+        time.sleep(1)
         api.arm()
 
-    api.takeoff(1.4, blocking=True, timeout=10)
+    api.takeoff(1.4, blocking=True, timeout=6)
     # solver.visualize(traj, waypoints, profile)
     if traj is None:
         api.log("Trajectory could not be solved")
