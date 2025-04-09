@@ -34,7 +34,7 @@ from sensor_msgs.msg import BatteryState, Imu, NavSatFix
 # Built-in messages
 from builtin_interfaces.msg import Time
 # Standard messages
-from std_msgs.msg import String, Float32, Float64, Int32, Int64
+from std_msgs.msg import String, Float32, Float64, Int32, Int64, Bool
 from rosgraph_msgs.msg import Clock
 
 
@@ -68,6 +68,7 @@ SUB_RC_IN = Subscriber("/mavros/rc/in", RCIn)
 
 #Vision Pose topics
 SUB_VPOSE = Subscriber("/mavros/vision_pose/pose_cov", PoseWithCovarianceStamped)
+PUB_VPOSE_RESET = Publisher("/cyclone_a2rl/reset", Bool)
 
 # Timers
 TIMER_GIMBAL = WallTimer("/mavros/rc/override", 0.1)
@@ -413,13 +414,24 @@ class MAVROS_API:
         return True
 
     @_connected
+    def reset_vision_pose(self):
+        '''
+        Resets the vision pose of the drone.
+        '''
+        data = Bool()
+        data.data = True
+        self.log("Resetting vision pose ...")
+        self.handler.publish_topic(PUB_VPOSE_RESET, data)
+        self.log("Vision pose reset!")
+
+    @_connected
     def reboot_controller(self):
         '''
         Reboots the flight controller.
         '''
         data = CommandLong.Request()
         data.command = 246
-        data.param1 = 1
+        data.param1 = 1.0
         self.log("Rebooting flight controller ...")
         self.handler.send_service_request(CLI_SEND_LONG, data)
 

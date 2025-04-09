@@ -71,7 +71,14 @@ if __name__ == '__main__':
             if api.get_rc_input().channels[7] > 1500: 
                 api.log("RC trigger received, proceeding...")
                 break
+        else:
+            api.set_steam_rate(3, 30, True)
+            time.sleep(1)
         time.sleep(0.1)
+
+    api.reboot_controller()
+    time.sleep(10)
+    api.reset_vision_pose()
 
     # Set streamrate for local pose messages and wait for convergence
     while True and not SIM:
