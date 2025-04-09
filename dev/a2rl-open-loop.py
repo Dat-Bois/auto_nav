@@ -66,10 +66,25 @@ if __name__ == '__main__':
     api = MAVROS_API(handler, sim=SIM)
     api.connect()
 
-    # Set streamrate for local pose messages
-    api.set_steam_rate(0, 30, True)
-    while api.get_local_pose() is None:
-        api.set_steam_rate(0, 30, True)
+    while True and not SIM:
+        if api.get_rc_input() is not None:
+            if api.get_rc_input().channels[7] > 1500: 
+                api.log("RC trigger received, proceeding...")
+                break
+        time.sleep(0.1)
+
+    # Set streamrate for local pose messages and wait for convergence
+    while True and not SIM:
+        api.set_steam_rate(6, 30, True)
+        while api.get_local_pose() is None:
+            time.sleep(3)
+            api.set_steam_rate(6, 30, True)
+        res = api.wait_for_vis_converge()
+        if not res:
+            api.reboot_controller()
+            time.sleep(10)
+            continue
+        break
 
     # api.land(at_home=True, blocking=True)
     # api.disconnect()
@@ -82,10 +97,6 @@ if __name__ == '__main__':
         api.arm()
     else:
         api.set_gp_origin(24.41526617, 54.44013134, 10.0)
-        # if not api.wait_for_arm():
-        #     api.log("Failed to arm the drone. Exiting...")
-        #     api.disconnect()
-        #     exit(1)
         api.wait_for_mode("GUIDED")
         time.sleep(1)
         api.arm()

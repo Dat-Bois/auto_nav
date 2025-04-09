@@ -14,7 +14,7 @@ from .sim.gz_truth import GzTopicParser
 
 # MAVROS messages
 # Generic services
-from mavros_msgs.srv import CommandBool, CommandHome, CommandTOL, SetMode, StreamRate, ParamSet
+from mavros_msgs.srv import CommandBool, CommandHome, CommandTOL, SetMode, StreamRate, ParamSet, CommandLong
 # Control messages
 from mavros_msgs.msg import State, OverrideRCIn, RCIn, Thrust, FullSetpoint
 # Waypoint messages
@@ -28,7 +28,7 @@ from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
 # Geographic messages
 from geographic_msgs.msg import GeoPoseStamped, GeoPointStamped
 # Geometry messages
-from geometry_msgs.msg import PoseStamped, Twist, TwistStamped, Vector3, Vector3Stamped
+from geometry_msgs.msg import PoseStamped, Twist, TwistStamped, Vector3, Vector3Stamped, PoseWithCovarianceStamped
 # Sensor messages
 from sensor_msgs.msg import BatteryState, Imu, NavSatFix
 # Built-in messages
@@ -66,6 +66,9 @@ SUB_VEL = Subscriber("/mavros/local_position/velocity_local", TwistStamped)
 # RC topics
 SUB_RC_IN = Subscriber("/mavros/rc/in", RCIn)
 
+#Vision Pose topics
+SUB_VPOSE = Subscriber("/mavros/vision_pose/pose_cov", PoseWithCovarianceStamped)
+
 # Timers
 TIMER_GIMBAL = WallTimer("/mavros/rc/override", 0.1)
 
@@ -77,6 +80,7 @@ CLI_LAND = Client("/mavros/cmd/land", CommandTOL)
 CLI_SET_MODE = Client("/mavros/set_mode", SetMode)
 CLI_SET_STREAM_RATE = Client("/mavros/set_stream_rate", StreamRate)
 CLI_SET_PARAM = Client("/mavros/param/set", ParamSet)
+CLI_SEND_LONG = Client("/mavros/cmd/command", CommandLong)
 
 #---------------------------------#
 class MAVROS_API:
@@ -282,6 +286,16 @@ class MAVROS_API:
         vel = self.get_local_vel()
         return DroneState(pose[0], pose[1], vel)
 
+    @_connected
+    def get_vision_pose(self) -> Point:
+        '''
+        Returns the vision pose of the drone. (XYZ only)
+        '''
+        data : PoseWithCovarianceStamped = SUB_VPOSE.get_latest_data(blocking=False)
+        if data == None:
+            return None
+        return Point(data.pose.pose.position)
+        
     '''
     ############## - SETTERS - ##############
     '''
@@ -370,6 +384,44 @@ class MAVROS_API:
             self.log("Waiting...")
             time.sleep(1)
         self.log(f"Drone is in {mode.upper()} mode!")
+
+    @_connected
+    def wait_for_vis_converge(self, timeout: float = 10):
+        '''
+        Waits for the vision pose to converge with Ardupilot's local pose.
+        '''
+        self.log("Waiting for poses to converge ...")
+        # Uses a moving average of both poses to determine convergence at 0.1m euclidean distance
+        while self.get_local_pose(as_type="point") is None or self.get_vision_pose() is None:
+            time.sleep(1)
+        start_time = time.time()
+        local_pose = self.get_local_pose(as_type="point")
+        vision_pose = self.get_vision_pose()
+        avg_local = np.array([local_pose.x, local_pose.y, local_pose.z])
+        avg_vision = np.array([vision_pose.x, vision_pose.y, vision_pose.z])
+        while np.linalg.norm(avg_local - avg_vision) > 0.1:
+            if time.time() - start_time > timeout:
+                self.log("Timeout reached while waiting for poses to converge.")
+                return False
+            local_pose = self.get_local_pose(as_type="point")
+            vision_pose = self.get_vision_pose()
+            avg_local = 0.5 * (avg_local + np.array([local_pose.x, local_pose.y, local_pose.z]))
+            avg_vision = 0.5 * (avg_vision + np.array([vision_pose.x, vision_pose.y, vision_pose.z]))
+            self.log(f"Avg Local: {avg_local} Avg Vision: {avg_vision} Distance: {np.linalg.norm(avg_local - avg_vision):.2f}m")
+            time.sleep(1)
+        self.log("Vision pose has converged with local pose!")
+        return True
+
+    @_connected
+    def reboot_controller(self):
+        '''
+        Reboots the flight controller.
+        '''
+        data = CommandLong.Request()
+        data.command = 246
+        data.param1 = 1
+        self.log("Rebooting flight controller ...")
+        self.handler.send_service_request(CLI_SEND_LONG, data)
 
     @_armed_connected
     def _takeoff(self, altitude : float):
