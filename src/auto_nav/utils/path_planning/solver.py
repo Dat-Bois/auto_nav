@@ -373,7 +373,12 @@ class QPSolver(BaseSolver):
       Formats the problem into a QP and solves it.
       Minimizes snap.
       '''
-      x_points, y_points, z_points = self._parse_waypoints(self.waypoints)
+      points = self._parse_waypoints(self.waypoints)
+      yaw_points = None
+      if(len(points) == 4):
+         x_points, y_points, z_points, yaw_points = points
+      else:
+         x_points, y_points, z_points = points
       # Use euclidean dist to parameterize the spline
       euclidean_length = np.cumsum(np.sqrt(np.diff(x_points)**2 + np.diff(y_points)**2 + np.diff(z_points)**2))
       euclidean_length = np.insert(euclidean_length, 0, 0)
@@ -396,6 +401,8 @@ class QPSolver(BaseSolver):
       x0, y0, z0 = x_points[0], y_points[0], z_points[0]
       constraints = [X[:, 0] == np.array([x0, y0, z0])]
       constraints += [V[:, 0] == self.current_velocity]
+      if yaw_points is not None:
+        constraints += [psi[0] == yaw_points[0] * (np.pi/180)]
       #--- Add motion constraints ---#
       for t in range(T - 1):
          constraints += [
@@ -403,6 +410,8 @@ class QPSolver(BaseSolver):
             V[:, t+1] == V[:, t] + A[:, t] * dt + 0.5 * J[:, t] * dt**2 + (1/6) * S[:, t] * dt**3,
             A[:, t+1] == A[:, t] + J[:, t] * dt + 0.5 * S[:, t] * dt**2,
             J[:, t+1] == J[:, t] + S[:, t] * dt,
+            psi[t+1] == psi[t] + psid[t] * dt + 0.5 * psidd[t] * dt**2,
+            psid[t+1] == psid[t] + psidd[t] * dt
          ]
       #--- Velocity and acceleration limits ---#
       if self.max_velocity is not None:
@@ -416,13 +425,24 @@ class QPSolver(BaseSolver):
             constraints += [cp.abs(J[i, :]) <= self.max_jerk]
       #--- Define waypoints and tolerance ---#
       tolerance = self.tolerance
+      yaw_tolerance = 2*(np.pi/180)
       for i, t_idx in enumerate(waypoint_times):
          constraints.append(X[:, int(t_idx)] >= np.array([x_points[i] - tolerance, y_points[i] - tolerance, z_points[i] - tolerance]))
          constraints.append(X[:, int(t_idx)] <= np.array([x_points[i] + tolerance, y_points[i] + tolerance, z_points[i] + tolerance]))
+         #--- Handle yaw constraints ---#
+         # if yaw_points is not None: #TODO: Figure this shit out
+         #       if yaw_points[i] != -1:
+         #          target_yaw = yaw_points[i] * (np.pi/180)
+         #          psi_t_idx = psi[int(t_idx)]
+         #          angle_diff = psi_t_idx - target_yaw
+         #          angle_diff = ca.fmod(psi[int(t_idx)] - target_yaw + ca.pi, 2*ca.pi) - ca.pi
+         #          constraints += [ca.fabs(angle_diff) <= yaw_tolerance]
       #--- Define cost function (acceleration, jerk, snap) ---#
       cost = cp.sum_squares(A)
       cost += cp.sum_squares(J)
       cost += cp.sum_squares(S)*10 # penalize snap more
+      # cost += cp.sum_squares(psid)
+      # cost += cp.sum_squares(psidd)
       #--- Solve the optimization problem ---#
       problem = cp.Problem(cp.Minimize(cost), constraints)
       try:
@@ -435,7 +455,9 @@ class QPSolver(BaseSolver):
          print("Failed to solve")
          return None
       trajectory = X.value.T
+      yaw = psi.value.T
       trajectory = np.insert(trajectory, 3, np.linspace(0, T*dt, T), axis=1)
+      trajectory = np.insert(trajectory, 4, yaw, axis=1)
       return trajectory
 
 class CasSolver(BaseSolver):
@@ -503,45 +525,27 @@ class CasSolver(BaseSolver):
          optimizer.subject_to(X[2,:] >= kwargs.get("min_height"))
       if kwargs.get("slow_at_end", False):
          print("Slow at end set")
-         optimizer.subject_to(V[0, -1] <= 0.3)
-         optimizer.subject_to(V[0, -1] >= -0.3)
-         optimizer.subject_to(V[1, -1] <= 0.3)
-         optimizer.subject_to(V[1, -1] >= -0.3)
-         optimizer.subject_to(V[2, -1] <= 0.5)
-         optimizer.subject_to(V[2, -1] >= -0.5)
+         for i in range(3):
+            optimizer.subject_to(V[i, -1] <= 0.3)
+            optimizer.subject_to(V[i, -1] >= -0.3)
 
       # Velocity constraints
       if self.max_velocity is not None:
-         optimizer.subject_to(-self.max_velocity <= V[0, :])
-         optimizer.subject_to(V[0, :] <= self.max_velocity)
-         
-         optimizer.subject_to(-self.max_velocity <= V[1, :])
-         optimizer.subject_to(V[1, :] <= self.max_velocity)
-         
-         optimizer.subject_to(-self.max_velocity <= V[2, :])
-         optimizer.subject_to(V[2, :] <= self.max_velocity)
+         for i in range(3):
+            optimizer.subject_to(-self.max_velocity <= V[i, :])
+            optimizer.subject_to(V[i, :] <= self.max_velocity)
 
       # Acceleration constraints
       if self.max_acceleration is not None:
-         optimizer.subject_to(-self.max_acceleration <= A[0, :])
-         optimizer.subject_to(A[0, :] <= self.max_acceleration)
-         
-         optimizer.subject_to(-self.max_acceleration <= A[1, :])
-         optimizer.subject_to(A[1, :] <= self.max_acceleration)
-         
-         optimizer.subject_to(-self.max_acceleration <= A[2, :])
-         optimizer.subject_to(A[2, :] <= self.max_acceleration)
+         for i in range(3):
+            optimizer.subject_to(-self.max_acceleration <= A[i, :])
+            optimizer.subject_to(A[i, :] <= self.max_acceleration)
 
       # Jerk constraints
       if self.max_jerk is not None:
-         optimizer.subject_to(-self.max_jerk <= J[0, :])
-         optimizer.subject_to(J[0, :] <= self.max_jerk)
-         
-         optimizer.subject_to(-self.max_jerk <= J[1, :])
-         optimizer.subject_to(J[1, :] <= self.max_jerk)
-         
-         optimizer.subject_to(-self.max_jerk <= J[2, :])
-         optimizer.subject_to(J[2, :] <= self.max_jerk)
+         for i in range(3):
+            optimizer.subject_to(-self.max_jerk <= J[i, :])
+            optimizer.subject_to(J[i, :] <= self.max_jerk)
 
       #--- Define waypoints and tolerance ---#
       tolerance = self.tolerance
@@ -552,7 +556,7 @@ class CasSolver(BaseSolver):
          if yaw_points is not None:
             if yaw_points[i] != -1:
                target_yaw = yaw_points[i] * (np.pi/180)
-               angle_diff = ca.fmod(psi[int(t_idx)] - target_yaw + ca.pi, 2*ca.pi) - ca.pi
+               angle_diff = ca.fmod(psi[int(t_idx)] - target_yaw + np.pi, 2*np.pi) - np.pi
                optimizer.subject_to(ca.fabs(angle_diff) <= yaw_tolerance)
       #--- Define cost function (acceleration, jerk, snap) ---#
       cost = ca.sumsqr(A)
@@ -705,16 +709,16 @@ if __name__  == "__main__":
 #  [  1.21      ,  10.24      ,   1.  ]])
    # waypoints = np.delete(waypoints, 3, axis=1)
    waypoints = np.array([
-      [20,10,1.45],
-      [34,12,1.45],
-      [20,16,1.45],
-      [12, 14, 1.45],
-      [20,10,1.45]
+      [20,10,1.45, 0],
+      [34,12,1.45, 0],
+      [20,16,1.45, 0],
+      [12, 14, 1.45, 90],
+      [20,10,1.45, 90]
    ])
-   solver = CasSolver()
+   solver = QPSolver()
    # solver.set_hard_constraints(max_tolerance=0.2)
-   solver.set_hard_constraints(max_velocity=2, max_acceleration=5, max_tolerance=0.2)
-   trajectory = solver.solve([18,10,0], waypoints)
+   # solver.set_hard_constraints(max_velocity=2, max_acceleration=5, max_tolerance=0.2)
+   trajectory = solver.solve([18,10,0], waypoints, current_orientation=0)
    # for i in trajectory:
    #    print("Line:", i)
    profile = solver.profile(trajectory)

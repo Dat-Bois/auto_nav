@@ -76,9 +76,10 @@ if __name__ == '__main__':
             time.sleep(1)
         time.sleep(0.1)
 
-    api.reboot_controller()
-    time.sleep(10)
-    api.reset_vision_pose()
+    if not SIM:
+        api.reboot_controller()
+        time.sleep(10)
+        api.reset_vision_pose()
 
     # Set streamrate for local pose messages and wait for convergence
     while True and not SIM:
@@ -91,6 +92,7 @@ if __name__ == '__main__':
             api.reboot_controller()
             api.reset_poses()
             time.sleep(10)
+            api.reset_vision_pose()
             continue
         break
 
@@ -174,7 +176,7 @@ if __name__ == '__main__':
                 if dist < 0.15:
                     api.log(f"Reached waypoint {target[:3]}, moving to next...")
                     break
-            api.set_full_setpoint(pxyz=target[:3])
+            api.set_local_pose(*target)
             api.log(f"Target: {target}, Current Position: ({pt.x:.2f}, {pt.y:.2f}, {pt.z:.2f}), Distance to target: {dist:.2f}")
             time.sleep(0.1)
 
