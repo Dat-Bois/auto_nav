@@ -86,9 +86,10 @@ if __name__ == '__main__':
         while api.get_local_pose() is None:
             time.sleep(3)
             api.set_steam_rate(6, 30, True)
-        res = api.wait_for_vis_converge()
+        res = api.wait_for_vis_converge(timeout=15)
         if not res:
             api.reboot_controller()
+            api.reset_poses()
             time.sleep(10)
             continue
         break

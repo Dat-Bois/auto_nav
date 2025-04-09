@@ -296,6 +296,14 @@ class MAVROS_API:
         if data == None:
             return None
         return Point(data.pose.pose.position)
+    
+    @_connected
+    def reset_poses(self) -> None:
+        '''
+        Resets the local and vision poses of the drone.
+        '''
+        SUB_VPOSE.reset_data()
+        SUB_POSE.reset_data()
         
     '''
     ############## - SETTERS - ##############

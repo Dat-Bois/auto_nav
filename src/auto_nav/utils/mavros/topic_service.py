@@ -54,6 +54,9 @@ class Subscriber(ROS_Service):
         self.__data = None
         return data
 
+    def reset_data(self):
+        self.__data = None
+
     def get_latest_data(self, blocking=False):
         if blocking:
             while self.__data is None:
