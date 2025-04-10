@@ -100,21 +100,23 @@ if __name__ == '__main__':
 
     if not SIM:
         api.reboot_controller()
-        time.sleep(10)
         api.reset_vision_pose()
+        time.sleep(5)
 
     # Set streamrate for local pose messages and wait for convergence
+    timeout = 15
     while True and not SIM:
         api.set_steam_rate(6, 30, True)
         while api.get_local_pose() is None:
             time.sleep(3)
             api.set_steam_rate(6, 30, True)
-        res = api.wait_for_vis_converge(timeout=15)
+        res = api.wait_for_vis_converge(timeout=timeout)
         if not res:
-            api.reboot_controller()
-            api.reset_poses()
-            time.sleep(10)
             api.reset_vision_pose()
+            api.reboot_controller()
+            time.sleep(5)
+            api.reset_poses()
+            timeout+=10
             continue
         break
 
