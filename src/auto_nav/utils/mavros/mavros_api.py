@@ -408,7 +408,7 @@ class MAVROS_API:
         vision_pose = self.get_vision_pose()
         avg_local = np.array([local_pose.x, local_pose.y, local_pose.z])
         avg_vision = np.array([vision_pose.x, vision_pose.y, vision_pose.z])
-        while np.linalg.norm(avg_local - avg_vision) > 0.1:
+        while np.linalg.norm(avg_local - avg_vision) > 0.15:
             if time.time() - start_time > timeout:
                 self.log("Timeout reached while waiting for poses to converge.")
                 return False
