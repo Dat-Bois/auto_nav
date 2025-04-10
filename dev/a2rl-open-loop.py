@@ -27,22 +27,44 @@ path = [
     wp_inline_with_gate(gates[2], -5), # gate 3
     (*wp_inline_with_gate(gates[2], 2)[:3], gates[3][3]), # gate 3
     wp_inline_with_gate(gates[4], -2), # DG1 top
-    wp_inline_with_gate(gates[4], 1), # DG1 top
-    wp_inline_with_gate(gates[5], -1), # DG2 top
-    wp_inline_with_gate(gates[5], 1, True), # DG2 top
-    wp_inline_with_gate(gates[6], 1, True), # DG2 bottom
-    wp_inline_with_gate(gates[6], -1, True), # DG2 bottom
-    wp_inline_with_gate(gates[7], 1, True), # G4
-    wp_inline_with_gate(gates[7], -1, True), # G4
-    wp_inline_with_gate(gates[8], 1, True), # G5
-    wp_inline_with_gate(gates[8], -1, True), # G5
-    wp_inline_with_gate(gates[9], 1, True), # G6
-    wp_inline_with_gate(gates[9], -1, True), # G6
-    wp_inline_with_gate(gates[10], 1, True), # G7
-    wp_inline_with_gate(gates[10], -1, True), # G7
-    wp_inline_with_gate(gates[11], -1), # G8
-    wp_inline_with_gate(gates[11], 1), # G8
+    wp_inline_with_gate(gates[4], 2), # DG1 top
+    wp_inline_with_gate(gates[5], -2), # DG2 top
+    wp_inline_with_gate(gates[5], 2, True), # DG2 top
+    wp_inline_with_gate(gates[6], 2, True), # DG2 bottom
+    wp_inline_with_gate(gates[6], -2, True), # DG2 bottom
+    wp_inline_with_gate(gates[7], 2, True), # G4
+    wp_inline_with_gate(gates[7], -2, True), # G4
+    wp_inline_with_gate(gates[8], 2, True), # G5
+    wp_inline_with_gate(gates[8], -2, True), # G5
+    wp_inline_with_gate(gates[9], 2, True), # G6
+    wp_inline_with_gate(gates[9], -2, True), # G6
+    wp_inline_with_gate(gates[10], 2, True), # G7
+    wp_inline_with_gate(gates[10], -2, True), # G7
+    wp_inline_with_gate(gates[11], -2), # G8
+    wp_inline_with_gate(gates[11], 2), # G8
     (8,22,1,35.), # takeoff point
+    wp_inline_with_gate(gates[0], -2), # gate 2
+    wp_inline_with_gate(gates[0], 2), # gate 2
+    wp_inline_with_gate(gates[1], -5), # gate 2
+    (*wp_inline_with_gate(gates[1], 2)[:3], gates[2][3]), # gate 2
+    wp_inline_with_gate(gates[2], -5), # gate 3
+    (*wp_inline_with_gate(gates[2], 2)[:3], gates[3][3]), # gate 3
+    wp_inline_with_gate(gates[4], -2), # DG1 top
+    wp_inline_with_gate(gates[4], 2), # DG1 top
+    wp_inline_with_gate(gates[5], -2), # DG2 top
+    wp_inline_with_gate(gates[5], 2, True), # DG2 top
+    wp_inline_with_gate(gates[6], 2, True), # DG2 bottom
+    wp_inline_with_gate(gates[6], -2, True), # DG2 bottom
+    wp_inline_with_gate(gates[7], 2, True), # G4
+    wp_inline_with_gate(gates[7], -2, True), # G4
+    wp_inline_with_gate(gates[8], 2, True), # G5
+    wp_inline_with_gate(gates[8], -2, True), # G5
+    wp_inline_with_gate(gates[9], 2, True), # G6
+    wp_inline_with_gate(gates[9], -2, True), # G6
+    wp_inline_with_gate(gates[10], 2, True), # G7
+    wp_inline_with_gate(gates[10], -2, True), # G7
+    wp_inline_with_gate(gates[11], -2), # G8
+    wp_inline_with_gate(gates[11], 2), # G8
 ]
 path = np.array(path)
 
