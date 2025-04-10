@@ -41,6 +41,11 @@ class RCLPY_Handler:
         self.logger = logging.getLogger('autonav')
         self.logger.addHandler(console)
 
+    def close_logger(self):
+        for handler in self.logger.handlers:
+            handler.close()
+            self.logger.removeHandler(handler)
+
     def log(self, msg : str):
         self.node.get_logger().info(msg)
         self.logger.info(msg)
@@ -57,6 +62,7 @@ class RCLPY_Handler:
     def disconnect(self):
         if self.connected:
             self.connected = False
+            self.close_logger()
             self.log("Shutting down rclpy ...")
             self.node.destroy_node()
             rclpy.shutdown()
