@@ -394,15 +394,10 @@ class QPSolver(BaseSolver):
       A = cp.Variable((3, T))  # Acceleration
       J = cp.Variable((3, T))  # Jerk
       S = cp.Variable((3, T))  # Snap
-      psi = cp.Variable(T)
-      psid = cp.Variable(T)
-      psidd = cp.Variable(T)
       #--- Define initial conditions ---#
       x0, y0, z0 = x_points[0], y_points[0], z_points[0]
       constraints = [X[:, 0] == np.array([x0, y0, z0])]
       constraints += [V[:, 0] == self.current_velocity]
-      if yaw_points is not None:
-        constraints += [psi[0] == yaw_points[0] * (np.pi/180)]
       #--- Add motion constraints ---#
       for t in range(T - 1):
          constraints += [
@@ -410,8 +405,6 @@ class QPSolver(BaseSolver):
             V[:, t+1] == V[:, t] + A[:, t] * dt + 0.5 * J[:, t] * dt**2 + (1/6) * S[:, t] * dt**3,
             A[:, t+1] == A[:, t] + J[:, t] * dt + 0.5 * S[:, t] * dt**2,
             J[:, t+1] == J[:, t] + S[:, t] * dt,
-            psi[t+1] == psi[t] + psid[t] * dt + 0.5 * psidd[t] * dt**2,
-            psid[t+1] == psid[t] + psidd[t] * dt
          ]
       #--- Velocity and acceleration limits ---#
       if self.max_velocity is not None:
@@ -429,20 +422,10 @@ class QPSolver(BaseSolver):
       for i, t_idx in enumerate(waypoint_times):
          constraints.append(X[:, int(t_idx)] >= np.array([x_points[i] - tolerance, y_points[i] - tolerance, z_points[i] - tolerance]))
          constraints.append(X[:, int(t_idx)] <= np.array([x_points[i] + tolerance, y_points[i] + tolerance, z_points[i] + tolerance]))
-         #--- Handle yaw constraints ---#
-         # if yaw_points is not None: #TODO: Figure this shit out
-         #       if yaw_points[i] != -1:
-         #          target_yaw = yaw_points[i] * (np.pi/180)
-         #          psi_t_idx = psi[int(t_idx)]
-         #          angle_diff = psi_t_idx - target_yaw
-         #          angle_diff = ca.fmod(psi[int(t_idx)] - target_yaw + ca.pi, 2*ca.pi) - ca.pi
-         #          constraints += [ca.fabs(angle_diff) <= yaw_tolerance]
       #--- Define cost function (acceleration, jerk, snap) ---#
       cost = cp.sum_squares(A)
       cost += cp.sum_squares(J)
       cost += cp.sum_squares(S)*10 # penalize snap more
-      # cost += cp.sum_squares(psid)
-      # cost += cp.sum_squares(psidd)
       #--- Solve the optimization problem ---#
       problem = cp.Problem(cp.Minimize(cost), constraints)
       try:
@@ -455,9 +438,7 @@ class QPSolver(BaseSolver):
          print("Failed to solve")
          return None
       trajectory = X.value.T
-      yaw = psi.value.T
       trajectory = np.insert(trajectory, 3, np.linspace(0, T*dt, T), axis=1)
-      trajectory = np.insert(trajectory, 4, yaw, axis=1)
       return trajectory
 
 class CasSolver(BaseSolver):
