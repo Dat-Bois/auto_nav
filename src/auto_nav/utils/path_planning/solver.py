@@ -2,6 +2,7 @@ import os
 import time as ti
 import warnings
 warnings.simplefilter("ignore", UserWarning)
+import math
 import numpy as np
 import cvxpy as cp
 import casadi as ca
@@ -98,7 +99,7 @@ class BaseSolver:
 
       self.constraints = {}
 
-   def _parse_waypoints(self, waypoints: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+   def _parse_waypoints(self, waypoints: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None]:
       if not isinstance(waypoints, np.ndarray): waypoints = np.array(waypoints)
       if not np.array_equal(waypoints[0],self.current_position) and self.current_position is not None:
          if waypoints.shape[1] == 4: pose = np.append(self.current_position, self.current_orientation)
@@ -107,12 +108,12 @@ class BaseSolver:
       x_points = waypoints[:, 0]
       y_points = waypoints[:, 1]
       z_points = waypoints[:, 2]
+      yaw_points = None
       if waypoints.shape[1] == 4:
          if self.current_orientation is not None:
             waypoints[0, 3] = self.current_orientation
          yaw_points = waypoints[:, 3]
-         return x_points, y_points, z_points, yaw_points
-      return x_points, y_points, z_points
+      return x_points, y_points, z_points, yaw_points
    
    def set_hard_constraints(self, **kwargs):
       '''
@@ -240,11 +241,7 @@ class BaseSolver:
       if actual_traj is not None:
          ax.plot(actual_traj[:, 0], actual_traj[:, 1], actual_traj[:, 2], color='blue', label='Actual Path')
       if waypoints is not None:
-         points = self._parse_waypoints(waypoints)
-         if(len(points) == 4):
-            x_points, y_points, z_points, yaw_points = points
-         else:
-            x_points, y_points, z_points = points
+         x_points, y_points, z_points, yaw_points = self._parse_waypoints(waypoints)
          ax.scatter(x_points, y_points, z_points, color='red', label='Waypoints')
       if self.waypoints is not None:
          for waypoint in self.waypoints:
@@ -313,7 +310,7 @@ class CubicSolver(BaseSolver):
       '''
       Uses a parametric cubic spline to generate a smooth trajectory.
       '''
-      x_points, y_points, z_points = self._parse_waypoints(self.waypoints)
+      x_points, y_points, z_points, yaw_points = self._parse_waypoints(self.waypoints)
       # Use euclidean length to parameterize the spline
       euclidean_length = np.cumsum(np.sqrt(np.diff(x_points)**2 + np.diff(y_points)**2 + np.diff(z_points)**2))
       euclidean_length = np.insert(euclidean_length, 0, 0)  # offset to start from zero
@@ -338,7 +335,7 @@ class LSQSolver(BaseSolver):
       '''
       Uses least squares to generate a smooth cubic trajectory.
       '''
-      x_points, y_points, z_points = self._parse_waypoints(self.waypoints)
+      x_points, y_points, z_points, yaw_points = self._parse_waypoints(self.waypoints)
       # Use euclidean length to parameterize the spline
       euclidean_length = np.cumsum(np.sqrt(np.diff(x_points)**2 + np.diff(y_points)**2 + np.diff(z_points)**2))
       euclidean_length = np.insert(euclidean_length, 0, 0)  # offset to start from zero
@@ -373,12 +370,7 @@ class QPSolver(BaseSolver):
       Formats the problem into a QP and solves it.
       Minimizes snap.
       '''
-      points = self._parse_waypoints(self.waypoints)
-      yaw_points = None
-      if(len(points) == 4):
-         x_points, y_points, z_points, yaw_points = points
-      else:
-         x_points, y_points, z_points = points
+      x_points, y_points, z_points, yaw_points = self._parse_waypoints(self.waypoints)
       # Use euclidean dist to parameterize the spline
       euclidean_length = np.cumsum(np.sqrt(np.diff(x_points)**2 + np.diff(y_points)**2 + np.diff(z_points)**2))
       euclidean_length = np.insert(euclidean_length, 0, 0)
@@ -450,12 +442,7 @@ class CasSolver(BaseSolver):
       Formats the problem into a constraint problem and solves it using ipopt.
       Minimizes snap and attempts yaw.
       '''
-      points = self._parse_waypoints(self.waypoints)
-      yaw_points = None
-      if(len(points) == 4):
-         x_points, y_points, z_points, yaw_points = points
-      else:
-         x_points, y_points, z_points = points
+      x_points, y_points, z_points, yaw_points = self._parse_waypoints(self.waypoints)
       # Use euclidean dist to parameterize the spline
       euclidean_length = np.cumsum(np.sqrt(np.diff(x_points)**2 + np.diff(y_points)**2 + np.diff(z_points)**2))
       euclidean_length = np.insert(euclidean_length, 0, 0)
@@ -576,8 +563,86 @@ class CasSolver(BaseSolver):
       return trajectory
 
 
+class QPSolver2(BaseSolver):
+   def __init__(self):
+      super().__init__()
+
+   def _form_basis(self, t: float, deg: int = 7) -> np.ndarray:
+      return np.array([t**i for i in range(deg+1)])
+   
+   def _get_coeffs(self, order: int, deg: int = 7) -> np.ndarray:
+      coeffs = np.zeros(deg+1)
+      for i in range(order, deg+1):
+         coeffs[i] = math.factorial(i) / math.factorial(i - order)
+      return coeffs
+   
+   def _get_dconstraint_row(self, t: float, order: int, deg: int = 7) -> np.ndarray:
+      '''
+      Returns a row vector for the constraint matrix.
+      Row corresponds to the derivative order at time t.
+      '''
+      row = np.zeros(deg+1)
+      coeffs = self._get_coeffs(order, deg)
+      for i in range(order, deg+1):
+         row[i] = coeffs[i] * (t ** (i - order))
+      return row
+   
+   def _hessian_block(self, t0: int, tf: int, deg: int = 7) -> np.ndarray:
+      '''
+      Hessian per segment for snap minimization
+      Qi,j = ∫ (coeff_i * coeff_j * t^(i+j-8)) dt from t0 to tf
+      Analytically solved as:
+         Qi,j = (coeff_i * coeff_j / (i + j - 7)) * (tf^(i+j-7) - t0^(i+j-7))
+      '''
+      Q = np.zeros((deg+1, deg+1))
+      snap_coeffs = self._get_coeffs(4, deg)
+      for i in range(4, deg+1):
+         for j in range(4, deg+1):
+            Q[i, j] = (snap_coeffs[i] * snap_coeffs[j] / (i + j - 7)) * (tf**(i + j - 7) - t0**(i + j - 7))
+      return Q
+   
+   def _build_hessian(self, segment_times: List[float], deg: int = 7) -> np.ndarray:
+      '''
+      Builds the full Hessian matrix for all segments.
+      '''
+      n_segments = len(segment_times)-1
+      # Per segment, we have (deg + 1) coefficients
+      H = np.zeros((n_segments * (deg + 1), n_segments * (deg + 1)))
+      for i in range(n_segments):
+         t0 = segment_times[i]
+         tf = segment_times[i+1]
+         Q_k = self._hessian_block(t0, tf, deg)
+         # Place Q_k in the appropriate block of H (along the diagonal)
+         H[i*(deg+1):(i+1)*(deg+1), i*(deg+1):(i+1)*(deg+1)] = Q_k
+      return H
+   
+   def _build_AB_constraints(self, times : List[float], deg: int = 7) -> Tuple[np.ndarray, np.ndarray]:
+      '''
+      Returns a matrix A and vector b such that Ax = b represents the equality constraints. (where x is the vector of all polynomial coefficients)
+      Need to enforce:
+         - Position constraints at waypoints
+         - Continuity of velocity, acceleration, jerk at segment boundaries (position inherited from above)
+         - Initial & Final conditions (position, velocity) TBD
+      '''
+      pass
+
+   def _solve(self, **kwargs) -> np.ndarray:
+      '''
+      Using the fact that each axis can be decoupled, we can solve 4 independent QPs for [x,y,z,yaw].
+      Minimizes snap^2.
+      '''
+      x_points, y_points, z_points, yaw_points = self._parse_waypoints(self.waypoints)
+      yaw_points = yaw_points if yaw_points is not None else np.zeros(len(x_points))
+      yaw_points = np.unwrap(np.radians(yaw_points))
+
+
+
       
 if __name__  == "__main__":
+
+   solver = QPSolver2()
+   h = solver._build_hessian([0,2,5])
+   print(h[0:8,0:8])
    # waypoints = np.array([  [0, 0, 0], 
    #                         [1, 2, 0],
    #                         [2, 0, 2], 
@@ -689,21 +754,21 @@ if __name__  == "__main__":
 #  [  1.84017226,   9.40531929,   1.35],
 #  [  1.21      ,  10.24      ,   1.  ]])
    # waypoints = np.delete(waypoints, 3, axis=1)
-   waypoints = np.array([
-      [20,10,1.45, 0],
-      [34,12,1.45, 0],
-      [20,16,1.45, 0],
-      [12, 14, 1.45, 90],
-      [20,10,1.45, 90]
-   ])
-   solver = QPSolver()
-   # solver.set_hard_constraints(max_tolerance=0.2)
-   # solver.set_hard_constraints(max_velocity=2, max_acceleration=5, max_tolerance=0.2)
-   trajectory = solver.solve([18,10,0], waypoints, current_orientation=0)
-   # for i in trajectory:
-   #    print("Line:", i)
-   profile = solver.profile(trajectory)
-   solver.visualize(trajectory, waypoints, profile)
+   # waypoints = np.array([
+   #    [20,10,1.45, 0],
+   #    [34,12,1.45, 0],
+   #    [20,16,1.45, 0],
+   #    [12, 14, 1.45, 90],
+   #    [20,10,1.45, 90]
+   # ])
+   # solver = QPSolver()
+   # # solver.set_hard_constraints(max_tolerance=0.2)
+   # # solver.set_hard_constraints(max_velocity=2, max_acceleration=5, max_tolerance=0.2)
+   # trajectory = solver.solve([18,10,0], waypoints, current_orientation=0)
+   # # for i in trajectory:
+   # #    print("Line:", i)
+   # profile = solver.profile(trajectory)
+   # solver.visualize(trajectory, waypoints, profile)
 
    # solver.set_hard_constraints(max_jerk=3)
    # solver.temporal_scale(trajectory)

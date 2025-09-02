@@ -12,7 +12,7 @@ Mk = 0.1
 M = 1.0  # Mass of the drone in kg
 # Assuming a perfect distanced quadrotor with 4 rotors
 L = 0.5  # Distance from the center of the quadrotor to each rotor in meters
-G = 9.81  # Acceleration due to gravity in m/s^2
+G = -9.81  # Acceleration due to gravity in m/s^2
 
 # Motor Matrix
 MOTOR_MIX = np.array([
@@ -22,7 +22,7 @@ MOTOR_MIX = np.array([
         [Mk, -Mk, Mk, -Mk]  #u4
     ])
 
-E3 = np.array([0,0,1]).T
+E3 = np.array([0,0,1])
 
 # TEST VARIABLES
 
@@ -30,17 +30,17 @@ E3 = np.array([0,0,1]).T
 # This can come from either the trajectory or solved via dt
 desired_pstate = np.array([2, 0, 2])  # [x, y, z]
 desired_vstate = np.array([1, 0, 0])  # [vx, vy, vz]
-desired_astate = np.array([0.3, 0, 0])  # [ax, ay, az]
-desired_jstate = np.array([0.1, 0, 0])  # [ax, ay, az]
-desired_psi = 1.2  # Desired yaw angle in radians
-desired_vpsi = 0.02  # Desired yaw rate in radians
+desired_astate = np.array([0, 0, 0])  # [ax, ay, az]
+desired_jstate = np.array([0, 0, 0])  # [jx, jy, jz]
+desired_psi = 0  # Desired yaw angle in radians
+desired_vpsi = 0  # Desired yaw rate in radians
 # Current state (world frame) 
 # This can be measured or derived from the position estimate and derived
 current_state = np.array([0, 0, 2])  # [x, y, z]
 current_vstate = np.array([0, 0, 0])  # [vx, vy, vz]
 current_astate = np.array([0, 0, 0])  # [ax, ay, az]
 current_jstate = np.array([0, 0, 0])  # [ax, ay, az]
-current_psi = 1.1  # Current yaw angle in radians
+current_psi = 0  # Current yaw angle in radians
 current_pqr = np.array([0, 0, 0])  # Current angular velocity in body frame [p, q, r]
 
 # Controller
@@ -52,7 +52,7 @@ Kp = np.identity(3) * 1.0  # Proportional gain for position control
 Kv = np.identity(3) * 0.5  # Derivative gain for velocity control
 
 # World frame
-Fdes = -(Kp @ eP.T + Kv @ eV.T) + np.array([0, 0, M * G]).T + M*current_astate
+Fdes = -(Kp @ eP.T + Kv @ eV.T) + np.array([0, 0, M * G]).T + M*desired_astate
 
 # Calculate the desired rotation matrix from world frame to body frame
 XcDes = np.array([np.cos(desired_psi), np.sin(desired_psi), 0])  # Align x-axis with desired yaw
