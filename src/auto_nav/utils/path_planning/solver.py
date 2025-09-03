@@ -616,15 +616,46 @@ class QPSolver2(BaseSolver):
          H[i*(deg+1):(i+1)*(deg+1), i*(deg+1):(i+1)*(deg+1)] = Q_k
       return H
    
-   def _build_AB_constraints(self, times : List[float], deg: int = 7) -> Tuple[np.ndarray, np.ndarray]:
+   def _build_AB_constraints(self, times : List[float], waypoints : List[float], axis : int, deg: int = 7) -> Tuple[np.ndarray, np.ndarray]:
       '''
       Returns a matrix A and vector b such that Ax = b represents the equality constraints. (where x is the vector of all polynomial coefficients)
       Need to enforce:
          - Position constraints at waypoints
          - Continuity of velocity, acceleration, jerk at segment boundaries (position inherited from above)
-         - Initial & Final conditions (position, velocity) TBD
-      '''
-      pass
+         - Initial & Final conditions (velocity)
+      ''' 
+      n_segments = len(times) - 1
+      n_coeffs = deg + 1
+      total_coeffs = n_segments * n_coeffs
+      A = []
+      b = []
+      # Position constraints at waypoints
+      for i, t in enumerate(times):
+         row = np.zeros(total_coeffs)
+         row[i*n_coeffs:(i+1)*n_coeffs] = self._get_dconstraint_row(t, 0, deg)
+         A.append(row)
+         b.append(waypoints[i])
+      # Continuity constraints at segment boundaries (velocity, acceleration, jerk)
+      for i in range(1, n_segments):
+         t = times[i]
+         for order in range(1, 4):
+            row = np.zeros(total_coeffs)
+            # From segment i-1 (end)
+            row[(i-1)*n_coeffs:i*n_coeffs] = self._get_dconstraint_row(t, order, deg)
+            # From segment i (start)
+            row[i*n_coeffs:(i+1)*n_coeffs] -= self._get_dconstraint_row(t, order, deg)
+            A.append(row)
+            b.append(0.0)
+      # Initial conditions (velocity)
+      row = np.zeros(total_coeffs)
+      row[0:n_coeffs] = self._get_dconstraint_row(times[0], 1, deg)
+      A.append(row)
+      b.append(self.current_velocity[axis])
+      # A = constraint matrix
+      # b = value vector
+      A = np.vstack(A)
+      b = np.array(b)
+      return A, b
 
    def _solve(self, **kwargs) -> np.ndarray:
       '''
