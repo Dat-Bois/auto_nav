@@ -86,7 +86,7 @@ class Profile:
 class BaseSolver:
    def __init__(self): 
       self.current_position : np.ndarray = None
-      self.current_velocity : np.ndarray = None
+      self.current_velocity : np.ndarray = [0,0,0]
       self.current_orientation = None
       self.waypoints = None
 
@@ -587,7 +587,7 @@ class QPSolver2(BaseSolver):
          row[i] = coeffs[i] * (t ** (i - order))
       return row
    
-   def _hessian_block(self, t0: int, tf: int, deg: int = 7) -> np.ndarray:
+   def _hessian_block(self, dt: float, deg: int = 7) -> np.ndarray:
       '''
       Hessian per segment for snap minimization
       Qi,j = ∫ (coeff_i * coeff_j * t^(i+j-8)) dt from t0 to tf
@@ -598,25 +598,23 @@ class QPSolver2(BaseSolver):
       snap_coeffs = self._get_coeffs(4, deg)
       for i in range(4, deg+1):
          for j in range(4, deg+1):
-            Q[i, j] = (snap_coeffs[i] * snap_coeffs[j] / (i + j - 7)) * (tf**(i + j - 7) - t0**(i + j - 7))
+            Q[i, j] = (snap_coeffs[i] * snap_coeffs[j] / (i + j - 7)) * (dt**(i + j - 7))
       return Q
    
    def _build_hessian(self, segment_times: List[float], deg: int = 7) -> np.ndarray:
       '''
       Builds the full Hessian matrix for all segments.
       '''
-      n_segments = len(segment_times)-1
+      n_segments = len(segment_times)
       # Per segment, we have (deg + 1) coefficients
       H = np.zeros((n_segments * (deg + 1), n_segments * (deg + 1)))
-      for i in range(n_segments):
-         t0 = segment_times[i]
-         tf = segment_times[i+1]
-         Q_k = self._hessian_block(t0, tf, deg)
+      for i, dt in enumerate(segment_times):
+         Q_k = self._hessian_block(dt, deg)
          # Place Q_k in the appropriate block of H (along the diagonal)
          H[i*(deg+1):(i+1)*(deg+1), i*(deg+1):(i+1)*(deg+1)] = Q_k
       return H
    
-   def _build_AB_constraints(self, times : List[float], waypoints : List[float], axis : int, deg: int = 7) -> Tuple[np.ndarray, np.ndarray]:
+   def _build_AB_constraints(self, segment_times : List[float], waypoints : List[float], axis : int, deg: int = 7) -> Tuple[np.ndarray, np.ndarray]:
       '''
       Returns a matrix A and vector b such that Ax = b represents the equality constraints. (where x is the vector of all polynomial coefficients)
       Need to enforce:
@@ -624,38 +622,93 @@ class QPSolver2(BaseSolver):
          - Continuity of velocity, acceleration, jerk at segment boundaries (position inherited from above)
          - Initial & Final conditions (velocity)
       ''' 
-      n_segments = len(times) - 1
+      n_segments = len(segment_times)
       n_coeffs = deg + 1
       total_coeffs = n_segments * n_coeffs
-      A = []
-      b = []
+      A, b = [], []
       # Position constraints at waypoints
-      for i, t in enumerate(times):
-         row = np.zeros(total_coeffs)
-         row[i*n_coeffs:(i+1)*n_coeffs] = self._get_dconstraint_row(t, 0, deg)
-         A.append(row)
-         b.append(waypoints[i])
+      for i in range(n_segments):
+        # Start of segment (t=0)
+        row = np.zeros(total_coeffs)
+        row[i*n_coeffs:(i+1)*n_coeffs] = self._get_dconstraint_row(0.0, 0, deg)
+        A.append(row)
+        b.append(waypoints[i])
+
+        # End of segment (t=dt)
+        row = np.zeros(total_coeffs)
+        row[i*n_coeffs:(i+1)*n_coeffs] = self._get_dconstraint_row(segment_times[i], 0, deg)
+        A.append(row)
+        b.append(waypoints[i+1])
       # Continuity constraints at segment boundaries (velocity, acceleration, jerk)
       for i in range(1, n_segments):
-         t = times[i]
-         for order in range(1, 4):
+        for order in range(1, 4):  # vel, accel, jerk
             row = np.zeros(total_coeffs)
-            # From segment i-1 (end)
-            row[(i-1)*n_coeffs:i*n_coeffs] = self._get_dconstraint_row(t, order, deg)
-            # From segment i (start)
-            row[i*n_coeffs:(i+1)*n_coeffs] -= self._get_dconstraint_row(t, order, deg)
+            # End of previous segment
+            row[(i-1)*n_coeffs:i*n_coeffs] = self._get_dconstraint_row(segment_times[i-1], order, deg)
+            # Start of current segment
+            row[i*n_coeffs:(i+1)*n_coeffs] -= self._get_dconstraint_row(0.0, order, deg)
             A.append(row)
             b.append(0.0)
       # Initial conditions (velocity)
       row = np.zeros(total_coeffs)
-      row[0:n_coeffs] = self._get_dconstraint_row(times[0], 1, deg)
+      row[0:n_coeffs] = self._get_dconstraint_row(0.0, 1, deg)
       A.append(row)
-      b.append(self.current_velocity[axis])
-      # A = constraint matrix
-      # b = value vector
-      A = np.vstack(A)
-      b = np.array(b)
+      if axis < 3:
+         b.append(self.current_velocity[axis])
+      else:
+         b.append(0.0)
+      A = np.vstack(A) # constraint matrix
+      b = np.array(b) # constraint vector
       return A, b
+   
+   def _solve_qp(self, H : np.ndarray, A : np.ndarray, b : np.ndarray) -> np.ndarray:
+      '''
+      KKT QP Solver
+      min (1/2) c^T H c
+      s.t. A c = b
+      '''
+      n_vars = H.shape[0]
+      n_constraints = A.shape[0]
+      # Build KKT matrix
+      KKT = np.block([
+         [H, A.T],
+         [A, np.zeros((n_constraints, n_constraints))]
+      ])
+      rhs = np.concatenate([np.zeros(n_vars), b])
+      # Solve KKT system
+      sol = np.linalg.solve(KKT, rhs)
+      c = sol[:n_vars]  # polynomial coefficients
+      return c
+
+   def _solve_axis(self, segment_times: List[float], waypoints: List[float], axis: int, deg: int = 7) -> np.ndarray:
+      '''
+      Solves for the polynomial coefficients for a single axis.
+      '''
+      H = self._build_hessian(segment_times, deg)
+      A, b = self._build_AB_constraints(segment_times, waypoints, axis, deg)
+      coeffs : np.ndarray = self._solve_qp(H, A, b)
+      return coeffs.reshape(-1, deg + 1)
+   
+   def _one_axis_sample(self, coeffs, dt_list, sample_dt=0.1):
+      total_time = sum(dt_list)
+      global_times = np.arange(0, total_time + sample_dt, sample_dt)
+      positions, velocities, accelerations = [], [], []
+      seg_edges = np.cumsum([0.0] + dt_list)
+      for t in global_times:
+         # Find which segment this time belongs to
+         seg_idx = np.searchsorted(seg_edges, t, side='right') - 1
+         seg_idx = min(seg_idx, len(dt_list) - 1)  # Clamp to last segment
+         local_t = t - seg_edges[seg_idx]
+
+         c = coeffs[seg_idx]
+         pos = np.polyval(c[::-1], local_t)
+         # pos vel computed here for testing for now TODO: remove
+         vel = np.polyval(np.polyder(c[::-1], 1), local_t)
+         acc = np.polyval(np.polyder(c[::-1], 2), local_t)
+         positions.append(pos)
+         velocities.append(vel)
+         accelerations.append(acc)
+      return global_times, np.array(positions), np.array(velocities), np.array(accelerations)
 
    def _solve(self, **kwargs) -> np.ndarray:
       '''
@@ -672,136 +725,33 @@ class QPSolver2(BaseSolver):
 if __name__  == "__main__":
 
    solver = QPSolver2()
-   h = solver._build_hessian([0,2,5])
-   print(h[0:8,0:8])
-   # waypoints = np.array([  [0, 0, 0], 
-   #                         [1, 2, 0],
-   #                         [2, 0, 2], 
-   #                         [3, -2.2, 2], 
-   #                         [1.5, 0, 2], 
-   #                         [5, 1, 1],
-   #                         [6, 0, 0], 
-   #                         [7, 2, 0],
-   #                         [8, 0, 0],
-   #                         [9, 0, 0]
-   #                         ])
-   # waypoints = np.array([  [0, 0, 0, 90], 
-   #                         [1, 2, 0, 180],
-   #                         [2, 0, 2, -1], 
-   #                         [3, -2.2, 2, -1], 
-   #                         [1.5, 0, 2, -1], 
-   #                         [5, 1, 1, -1],
-   #                         [6, 0, 0, -1], 
-   #                         [7, 2, 0, -1],
-   #                         [8, 0, 0, -1],
-   #                         [9, 0, 0, -1]
-   #                         ])
-   # waypoints = np.array([[  1.21      ,  10.24      ,   1.35      ,  -1      ],
-   #     [  2.92606891,  12.44012771,   1.35      ,  43.62      ],
-   #     [  4.37393109,  13.81987229,   1.35      , 345      ],
-   #     [  7.74597775,  11.99999738,   1.35      , 345      ],
-   #     [ 12.57402225,  10.70000262,   1.35      ,  53.82      ],
-   #     [ 14.11419013,  12.93208394,   1.35      ,  53.82      ],
-   #     [ 16.47548592,  16.16074963,   1.35      ,  53.82      ],
-   #     [ 16.47548592,  16.16074963,   1.45      ,  90.        ],
-   #     [ 17.25158047,  16.0631713 ,   1.75      ,  85.98      ],
-   #     [ 17.73321315,  15.47721697,   2.05      ,  81.96      ],
-   #     [ 17.94227549,  14.69529186,   2.35      ,  77.94      ],
-   #     [ 17.83353107,  13.84701844,   2.65      ,  73.92      ],
-   #     [ 17.40271384,  13.06103983,   2.95      ,  69.9       ],
-   #     [ 16.69042814,  12.45735231,   3.25      ,  65.88      ],
-   #     [ 15.77806617,  12.133396  ,   3.55      ,  61.86      ],
-   #     [ 14.77793725,  12.15121548,   3.85      ,  57.84      ],
-   #     [ 13.81902815,  12.52850073,   4.15      ,  53.82      ],
-   #     [ 14.11419013,  12.93208394,   4.05      ,  53.82      ],
-   #     [ 16.18032395,  15.75716642,   4.05      ,  53.82      ],
-   #     [ 18.18032395,  15.75716642,   4.05      ,  90.        ],
-   #     [ 18.77499031,  15.88005632,   4.05      , 180.        ],
-   #     [ 18.80500969,  19.87994368,   4.05      , 250.        ],
-   #     [ 18.80500969,  19.87994368,   1.35      , 270.        ],
-   #     [ 18.78249515,  16.88002816,   1.35      , 250.        ],
-   #     [ 16.7706479 ,  16.56433285,   1.35      , 233.82      ],
-   #     [ 14.4093521 ,  13.33566715,   1.35      , 233.82      ],
-   #     [ 14.81902815,  12.52850073,   1.35      , 180.        ],
-   #     [ 16.04999235,  11.98547524,   1.45      , 180.        ],
-   #     [ 16.80048596,  12.20805355,   1.75      , 128.2718142 ],
-   #     [ 17.45686885,  12.62974244,   2.05      , 116.31513304],
-   #     [ 17.95170916,  13.22275585,   2.35      , 108.07769067],
-   #     [ 18.22362757,  13.92954066,   2.65      , 101.59473183],
-   #     [ 18.23162321,  14.66396083,   2.95      ,  96.16637445],
-   #     [ 17.96893962,  15.31912966,   3.25      ,  91.45325067],
-   #     [ 17.473598  ,  15.78155123,   3.55      ,  87.26222772],
-   #     [ 16.83295695,  15.9500776 ,   3.85      ,  83.47179212],
-   #     [ 16.18032395,  15.75716642,   4.15      ,  80.        ],
-   #     [ 16.18032395,  15.75716642,   4.05      ,  53.82      ],
-   #     [ 14.4093521 ,  13.33566715,   4.05      ,  53.82      ],
-   #     [ 12.0912178 ,  10.83000209,   1.35      ,  53.82      ],
-   #     [  9.1943911 ,  11.60999895,   1.35      ,  43.82      ],
-   #     [  8.2287822 ,  10.86999791,   1.35      ,  20.        ],
-   #     [  1.84017226,   9.40531929,   1.35      ,  43.62      ],
-   #     [  1.21      ,  10.24      ,   1.        ,  43.62      ]])
-#    waypoints = np.array([[  1.21      ,  10.24      ,   1.35],
-#  [  2.92606891,  12.44012771,   1.35],
-#  [  4.37393109,  13.81987229,   1.35],
-#  [  7.74597775,  11.99999738,   1.35],
-#  [ 12.57402225,  10.70000262,   1.35],
-#  [ 14.11419013,  12.93208394,   1.35],
-#  [ 16.47548592,  16.16074963,   1.35],
-#  [ 16.47548592,  16.16074963,   1.45],
-#  [ 17.25158047,  16.0631713 ,   1.75],
-#  [ 17.73321315,  15.47721697,   2.05],
-#  [ 17.94227549,  14.69529186,   2.35],
-#  [ 17.83353107,  13.84701844,   2.65],
-#  [ 17.40271384,  13.06103983,   2.95],
-#  [ 16.69042814,  12.45735231,   3.25],
-#  [ 15.77806617,  12.133396  ,   3.55],
-#  [ 14.77793725,  12.15121548,   3.85],
-#  [ 13.81902815,  12.52850073,   4.15],
-#  [ 14.11419013,  12.93208394,   4.05],
-#  [ 16.18032395,  15.75716642,   4.05],
-#  [ 18.18032395,  15.75716642,   4.05],
-#  [ 18.77499031,  15.88005632,   4.05],
-#  [ 18.80500969,  19.87994368,   4.05],
-#  [ 18.80500969,  19.87994368,   1.35],
-#  [ 18.78249515,  16.88002816,   1.35],
-#  [ 16.7706479 ,  16.56433285,   1.35],
-#  [ 14.4093521 ,  13.33566715,   1.35],
-#  [ 14.81902815,  12.52850073,   1.35],
-#  [ 16.04999235,  11.98547524,   1.45],
-#  [ 16.80048596,  12.20805355,   1.75],
-#  [ 17.45686885,  12.62974244,   2.05],
-#  [ 17.95170916,  13.22275585,   2.35],
-#  [ 18.22362757,  13.92954066,   2.65],
-#  [ 18.23162321,  14.66396083,   2.95],
-#  [ 17.96893962,  15.31912966,   3.25],
-#  [ 17.473598  ,  15.78155123,   3.55],
-#  [ 16.83295695,  15.9500776 ,   3.85],
-#  [ 16.18032395,  15.75716642,   4.15],
-#  [ 16.18032395,  15.75716642,   4.05],
-#  [ 14.4093521 ,  13.33566715,   4.05],
-#  [ 12.0912178 ,  10.83000209,   1.35],
-#  [  9.1943911 ,  11.60999895,   1.35],
-#  [  8.2287822 ,  10.86999791,   1.35],
-#  [  1.84017226,   9.40531929,   1.35],
-#  [  1.21      ,  10.24      ,   1.  ]])
-   # waypoints = np.delete(waypoints, 3, axis=1)
-   # waypoints = np.array([
-   #    [20,10,1.45, 0],
-   #    [34,12,1.45, 0],
-   #    [20,16,1.45, 0],
-   #    [12, 14, 1.45, 90],
-   #    [20,10,1.45, 90]
-   # ])
-   # solver = QPSolver()
-   # # solver.set_hard_constraints(max_tolerance=0.2)
-   # # solver.set_hard_constraints(max_velocity=2, max_acceleration=5, max_tolerance=0.2)
-   # trajectory = solver.solve([18,10,0], waypoints, current_orientation=0)
-   # # for i in trajectory:
-   # #    print("Line:", i)
-   # profile = solver.profile(trajectory)
-   # solver.visualize(trajectory, waypoints, profile)
+   # h = solver._build_hessian([2,3])
+   # print(h[0:8,0:8])
+   import time
+   import matplotlib.pyplot as plt
 
-   # solver.set_hard_constraints(max_jerk=3)
-   # solver.temporal_scale(trajectory)
-   # profile = solver.profile(trajectory)
-   # solver.visualize(trajectory, waypoints, profile)
+   # time, pos [0,0], [3,5], [6,-2], [10, 4]
+   waypoints = np.array([0,5,-2,4])
+   dtlist = [3,3,4]
+   s = time.time()
+   coeffs = solver._solve_axis(dtlist, waypoints, 0)
+   print("Solve time: ", time.time() - s)
+   print("Coeffs: \n", coeffs)
+   print(coeffs.shape)
+   times, pos, vel, acc = solver._one_axis_sample(coeffs, dtlist)
+
+   plt.figure(figsize=(10,6))
+   plt.subplot(3,1,1)
+   plt.plot(times, pos)
+   plt.ylabel("Position")
+
+   plt.subplot(3,1,2)
+   plt.plot(times, vel)
+   plt.ylabel("Velocity")
+
+   plt.subplot(3,1,3)
+   plt.plot(times, acc)
+   plt.ylabel("Acceleration")
+   plt.xlabel("Time (s)")
+   plt.tight_layout()
+   plt.show()
