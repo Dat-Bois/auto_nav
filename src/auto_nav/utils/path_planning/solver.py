@@ -614,13 +614,14 @@ class QPSolver2(BaseSolver):
          H[i*(deg+1):(i+1)*(deg+1), i*(deg+1):(i+1)*(deg+1)] = Q_k
       return H
    
-   def _build_AB_constraints(self, segment_times : List[float], waypoints : List[float], axis : int, deg: int = 7) -> Tuple[np.ndarray, np.ndarray]:
+   def _build_AB_constraints(self, segment_times : List[float], waypoints : List[float], axis : int, just_b = False, deg: int = 7) -> Tuple[np.ndarray, np.ndarray]:
       '''
       Returns a matrix A and vector b such that Ax = b represents the equality constraints. (where x is the vector of all polynomial coefficients)
       Need to enforce:
          - Position constraints at waypoints
          - Continuity of velocity, acceleration, jerk at segment boundaries (position inherited from above)
          - Initial & Final conditions (velocity)
+      For R3 same A can be used, just b changes.
       ''' 
       n_segments = len(segment_times)
       n_coeffs = deg + 1
@@ -628,20 +629,25 @@ class QPSolver2(BaseSolver):
       A, b = [], []
       # Position constraints at waypoints
       for i in range(n_segments):
-        # Start of segment (t=0)
-        row = np.zeros(total_coeffs)
-        row[i*n_coeffs:(i+1)*n_coeffs] = self._get_dconstraint_row(0.0, 0, deg)
-        A.append(row)
-        b.append(waypoints[i])
+         # Start of segment (t=0)
+         if(not just_b):
+            row = np.zeros(total_coeffs)
+            row[i*n_coeffs:(i+1)*n_coeffs] = self._get_dconstraint_row(0.0, 0, deg)
+            A.append(row)
+         b.append(waypoints[i])
 
-        # End of segment (t=dt)
-        row = np.zeros(total_coeffs)
-        row[i*n_coeffs:(i+1)*n_coeffs] = self._get_dconstraint_row(segment_times[i], 0, deg)
-        A.append(row)
-        b.append(waypoints[i+1])
+         # End of segment (t=dt)
+         if(not just_b):
+            row = np.zeros(total_coeffs)
+            row[i*n_coeffs:(i+1)*n_coeffs] = self._get_dconstraint_row(segment_times[i], 0, deg)
+            A.append(row)
+         b.append(waypoints[i+1])
       # Continuity constraints at segment boundaries (velocity, acceleration, jerk)
       for i in range(1, n_segments):
-        for order in range(1, 4):  # vel, accel, jerk
+         for order in range(1, 4):  # vel, accel, jerk
+            if(just_b):
+               b.append(0.0)
+               continue
             row = np.zeros(total_coeffs)
             # End of previous segment
             row[(i-1)*n_coeffs:i*n_coeffs] = self._get_dconstraint_row(segment_times[i-1], order, deg)
@@ -652,12 +658,12 @@ class QPSolver2(BaseSolver):
       # Initial conditions (velocity)
       row = np.zeros(total_coeffs)
       row[0:n_coeffs] = self._get_dconstraint_row(0.0, 1, deg)
-      A.append(row)
+      if(not just_b): A.append(row)
       if axis < 3:
          b.append(self.current_velocity[axis])
       else:
          b.append(0.0)
-      A = np.vstack(A) # constraint matrix
+      if(not just_b): A = np.vstack(A) # constraint matrix
       b = np.array(b) # constraint vector
       return A, b
    
@@ -685,11 +691,71 @@ class QPSolver2(BaseSolver):
       Solves for the polynomial coefficients for a single axis.
       '''
       H = self._build_hessian(segment_times, deg)
-      A, b = self._build_AB_constraints(segment_times, waypoints, axis, deg)
+      A, b = self._build_AB_constraints(segment_times, waypoints, axis, 0, deg)
       coeffs : np.ndarray = self._solve_qp(H, A, b)
       return coeffs.reshape(-1, deg + 1)
    
-   def _one_axis_sample(self, coeffs, dt_list, sample_dt=0.1):
+   def _evaluate_cost(self, segment_times: List[float], waypoints: Tuple) -> Tuple[np.ndarray, float]:
+      '''
+      Solves for all axes and evaluates the total cost.
+      Segment times is the dt per segment. 
+      Waypoints is a tuple of (x_points, y_points, z_points, yaw_points)
+      Returns the coefficients for all axes and the total cost.
+      '''
+      rH = self._build_hessian(segment_times, 7)
+      A, b = self._build_AB_constraints(segment_times, waypoints[0], False, deg=7)
+      muJ = 0.5
+      muPsi = 0.1
+      total_cost = 0.0
+      all_coeffs = {}
+      for i,axis in enumerate(["x","y","z"]):
+         _, b = self._build_AB_constraints(segment_times, waypoints[i], i, just_b=True, deg=7)
+         coeffs = self._solve_qp(rH, A, b)
+         # 1 * 1x24 * 24x24 * 24x1 = 1x1
+         total_cost += muJ * (coeffs.T @ rH @ coeffs)
+         all_coeffs[axis] = coeffs.reshape(-1, 8)
+
+      H_psi = self._build_hessian(segment_times, 5)
+      A_psi, b_psi = self._build_AB_constraints(segment_times, waypoints[3], 3, deg=5)
+      coeffs_psi = self._solve_qp(H_psi, A_psi, b_psi)
+      total_cost += muPsi * (coeffs_psi.T @ H_psi @ coeffs_psi)
+      all_coeffs["yaw"] = coeffs_psi.reshape(-1, 6)
+      return all_coeffs, total_cost
+   
+   def _build_gi(self, i, m):
+      gi = np.full(m, -1/(m-2))
+      gi[i] = 1.0
+      return gi
+
+   def _optimize_segment_times(self, dt: np.ndarray, waypoints: Tuple, max_iter: int = 10) -> Tuple[dict, np.ndarray]:
+      h=1e-3
+      lr = 0.1
+      alpha = 0.5
+      tolerance = 1e-4
+      total_time = sum(dt)
+      for it in range(max_iter):
+         coeffs, cost = self._evaluate_cost(dt, waypoints)
+         grad = np.zeros_like(dt)
+         for i in range(len(dt)):
+            gi = self._build_gi(i, len(dt))
+            grad[i] = (self._evaluate_cost(dt + h*gi, waypoints)[1] - cost) / h
+         dt_new = dt - lr * grad
+         dt_new = np.clip(dt_new, 1e-3)
+         dt_new = (dt_new / sum(dt_new)) * total_time # normalize
+         coeffs, new_cost = self._evaluate_cost(dt_new, waypoints)
+         # Backtracking line search
+         while new_cost > cost and lr > 1e-6:
+            lr *= alpha
+            dt_new = dt - lr * grad
+            dt_new = np.clip(dt_new, 1e-3)
+            dt_new = (dt_new / sum(dt_new)) * total_time
+            coeffs, new_cost = self._evaluate_cost(dt_new, waypoints)
+         if abs(new_cost - cost) < tolerance:
+            break
+         dt = dt_new
+      return coeffs, dt
+   
+   def _one_axis_sample(self, coeffs, dt_list, sample_dt=0.1): # Test function for debugging
       total_time = sum(dt_list)
       global_times = np.arange(0, total_time + sample_dt, sample_dt)
       positions, velocities, accelerations = [], [], []
@@ -718,6 +784,21 @@ class QPSolver2(BaseSolver):
       x_points, y_points, z_points, yaw_points = self._parse_waypoints(self.waypoints)
       yaw_points = yaw_points if yaw_points is not None else np.zeros(len(x_points))
       yaw_points = np.unwrap(np.radians(yaw_points))
+      # Use euclidean dist to parameterize the spline
+      euclidean_length = np.cumsum(np.sqrt(np.diff(x_points)**2 + np.diff(y_points)**2 + np.diff(z_points)**2))
+      euclidean_length = np.insert(euclidean_length, 0, 0)
+      # Initial guess for segment times based on distance and desired velocity
+      desired_velocity = kwargs.get("desired_velocity", 2.0)
+      dt = np.rint((euclidean_length[1:] - euclidean_length[:-1]) / desired_velocity).astype(float)
+      dt = np.clip(dt, 1.0, None) # min segment time of 1s
+      # Optimize segment times
+      waypoints = (x_points, y_points, z_points, yaw_points)
+      if(kwargs.get("optimize", False)):
+         coeffs, dt = self._optimize_segment_times(dt, waypoints, max_iter=20)
+      else:
+         coeffs, dt = self._evaluate_cost(dt, waypoints)
+      # Sample the trajectory
+
 
 
 
