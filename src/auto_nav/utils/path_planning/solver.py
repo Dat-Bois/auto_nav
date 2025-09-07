@@ -695,7 +695,7 @@ class QPSolver2(BaseSolver):
       coeffs : np.ndarray = self._solve_qp(H, A, b)
       return coeffs.reshape(-1, deg + 1)
    
-   def _evaluate_cost(self, segment_times: List[float], waypoints: Tuple) -> Tuple[np.ndarray, float]:
+   def _evaluate_cost(self, segment_times: List[float], waypoints: Tuple) -> Tuple[dict, float]:
       '''
       Solves for all axes and evaluates the total cost.
       Segment times is the dt per segment. 
@@ -703,7 +703,7 @@ class QPSolver2(BaseSolver):
       Returns the coefficients for all axes and the total cost.
       '''
       rH = self._build_hessian(segment_times, 7)
-      A, b = self._build_AB_constraints(segment_times, waypoints[0], False, deg=7)
+      A, b = self._build_AB_constraints(segment_times, waypoints[0], 0)
       muJ = 0.5
       muPsi = 0.1
       total_cost = 0.0
@@ -730,8 +730,8 @@ class QPSolver2(BaseSolver):
    def _optimize_segment_times(self, dt: np.ndarray, waypoints: Tuple, max_iter: int = 10) -> Tuple[dict, np.ndarray]:
       h=1e-3
       lr = 0.1
-      alpha = 0.5
-      tolerance = 1e-4
+      alpha = 0.4
+      tolerance = 1e-6
       total_time = sum(dt)
       for it in range(max_iter):
          coeffs, cost = self._evaluate_cost(dt, waypoints)
@@ -740,19 +740,20 @@ class QPSolver2(BaseSolver):
             gi = self._build_gi(i, len(dt))
             grad[i] = (self._evaluate_cost(dt + h*gi, waypoints)[1] - cost) / h
          dt_new = dt - lr * grad
-         dt_new = np.clip(dt_new, 1e-3)
+         dt_new = np.clip(dt_new, 1e-3, None)
          dt_new = (dt_new / sum(dt_new)) * total_time # normalize
          coeffs, new_cost = self._evaluate_cost(dt_new, waypoints)
          # Backtracking line search
          while new_cost > cost and lr > 1e-6:
             lr *= alpha
             dt_new = dt - lr * grad
-            dt_new = np.clip(dt_new, 1e-3)
+            dt_new = np.clip(dt_new, 1e-3, None)
             dt_new = (dt_new / sum(dt_new)) * total_time
             coeffs, new_cost = self._evaluate_cost(dt_new, waypoints)
-         if abs(new_cost - cost) < tolerance:
-            break
          dt = dt_new
+         if abs(new_cost - cost) < tolerance:
+            print(f"Converged after {it} iterations")
+            break
       return coeffs, dt
    
    def _one_axis_sample(self, coeffs, dt_list, sample_dt=0.1): # Test function for debugging
@@ -789,50 +790,47 @@ class QPSolver2(BaseSolver):
       euclidean_length = np.insert(euclidean_length, 0, 0)
       # Initial guess for segment times based on distance and desired velocity
       desired_velocity = kwargs.get("desired_velocity", 2.0)
-      dt = np.rint((euclidean_length[1:] - euclidean_length[:-1]) / desired_velocity).astype(float)
+      dt = (euclidean_length[1:] - euclidean_length[:-1]) / desired_velocity
       dt = np.clip(dt, 1.0, None) # min segment time of 1s
-      # Optimize segment times
       waypoints = (x_points, y_points, z_points, yaw_points)
       if(kwargs.get("optimize", False)):
-         coeffs, dt = self._optimize_segment_times(dt, waypoints, max_iter=20)
+         coeffs, dt = self._optimize_segment_times(dt, waypoints, max_iter=kwargs.get("max_iter", 20))
       else:
-         coeffs, dt = self._evaluate_cost(dt, waypoints)
-      # Sample the trajectory
-
-
-
-
+         coeffs, _ = self._evaluate_cost(dt, waypoints)
+      # Sample
+      sample_dt = 0.1
+      total_time = sum(dt)
+      global_times = np.arange(0, total_time + sample_dt, sample_dt)
+      seg_edges = np.cumsum(np.concatenate(([0.0],dt)))
+      traj = np.zeros((len(global_times), 5)) # [x,y,z,time,yaw]
+      for i,t in enumerate(global_times):
+         # Find which segment this time belongs to
+         seg_idx = np.searchsorted(seg_edges, t, side='right') - 1
+         seg_idx = min(seg_idx, len(dt) - 1)  # Clamp to last segment
+         local_t = t - seg_edges[seg_idx]
+         row = np.zeros(5) # [x,y,z,time,yaw]
+         for j, axis in enumerate(["x","y","z","t","yaw"]):
+            if(j==3): row[j] = t
+            else:
+               c = coeffs[axis][seg_idx]
+               row[j] = np.polyval(c[::-1], local_t)
+         traj[i] = row
+      return traj
       
 if __name__  == "__main__":
-
-   solver = QPSolver2()
-   # h = solver._build_hessian([2,3])
-   # print(h[0:8,0:8])
    import time
-   import matplotlib.pyplot as plt
-
-   # time, pos [0,0], [3,5], [6,-2], [10, 4]
-   waypoints = np.array([0,5,-2,4])
-   dtlist = [3,3,4]
+   solver = QPSolver2()
+   waypoints = np.array([
+      [0, 0, 1, 0],
+      [2, 2, 3, 90],
+      [4, -2, 5, 180],
+      [6, 0, 3, -90],
+      [8, 0, 1, 0]
+   ])
    s = time.time()
-   coeffs = solver._solve_axis(dtlist, waypoints, 0)
+   traj = solver.solve(None, waypoints, optimize=True, max_iter=20, desired_velocity=2.0)
    print("Solve time: ", time.time() - s)
-   print("Coeffs: \n", coeffs)
-   print(coeffs.shape)
-   times, pos, vel, acc = solver._one_axis_sample(coeffs, dtlist)
-
-   plt.figure(figsize=(10,6))
-   plt.subplot(3,1,1)
-   plt.plot(times, pos)
-   plt.ylabel("Position")
-
-   plt.subplot(3,1,2)
-   plt.plot(times, vel)
-   plt.ylabel("Velocity")
-
-   plt.subplot(3,1,3)
-   plt.plot(times, acc)
-   plt.ylabel("Acceleration")
-   plt.xlabel("Time (s)")
-   plt.tight_layout()
-   plt.show()
+   # print(traj)
+   # print("Trajectory shape: ", traj.shape)
+   profile = solver.profile(traj)
+   solver.visualize(traj, waypoints, profile)
