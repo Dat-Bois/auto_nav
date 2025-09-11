@@ -563,7 +563,7 @@ class CasSolver(BaseSolver):
       return trajectory
 
 
-class QPSolver2(BaseSolver):
+class TimeQPSolver(BaseSolver):
    def __init__(self):
       super().__init__()
 
@@ -819,7 +819,7 @@ class QPSolver2(BaseSolver):
       
 if __name__  == "__main__":
    import time
-   solver = QPSolver2()
+   solver = TimeQPSolver()
    waypoints = np.array([
       [0, 0, 1, 0],
       [2, 2, 3, 90],
