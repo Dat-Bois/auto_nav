@@ -32,9 +32,10 @@ A solver should take in the following inputs:
 '''
 
 class Profile:
-   def __init__(self, times: np.ndarray, velocity: np.ndarray, acceleration: np.ndarray, jerk: np.ndarray, snap: np.ndarray, 
+   def __init__(self, times: np.ndarray, traj: np.ndarray, velocity: np.ndarray, acceleration: np.ndarray, jerk: np.ndarray, snap: np.ndarray, 
                 psi: np.ndarray = None, psi_dot: np.ndarray = None, psi_ddot: np.ndarray = None, body_velocity: np.ndarray = None):
       self.times = times
+      self.trajectory = traj
       self.velocity = velocity
       self.body_velocity = body_velocity
       self.acceleration = acceleration
@@ -45,6 +46,33 @@ class Profile:
       self.psi_ddot = psi_ddot
 
       self._actual_path : np.ndarray = None
+
+   def get_state(self, t: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, float]:
+      '''
+      Return the state at time t. (Interpolates between points if necessary)
+      Format is a tuple of (pos, vel, accel, jerk, yaw, yaw_rate)
+      '''
+      if t <= self.times[0]: idx = 0
+      elif t >= self.times[-1]: idx = -1
+      else: idx = np.searchsorted(self.times, t) - 1
+      # If exact match, return the state, else interpolate
+      if self.times[idx] == t or idx == len(self.times) - 1:
+         pos = self.trajectory[idx]
+         vel = self.velocity[idx]
+         accel = self.acceleration[idx]
+         jerk = self.jerk[idx]
+         yaw = self.psi[idx] if self.psi is not None else 0.0
+         yaw_rate = self.psi_dot[idx] if self.psi_dot is not None else 0.0
+      else:
+         t0, t1 = self.times[idx], self.times[idx + 1]
+         alpha = (t - t0) / (t1 - t0)
+         pos = (1 - alpha) * self.trajectory[idx] + alpha * self.trajectory[idx + 1]
+         vel = (1 - alpha) * self.velocity[idx] + alpha * self.velocity[idx + 1]
+         accel = (1 - alpha) * self.acceleration[idx] + alpha * self.acceleration[idx + 1]
+         jerk = (1 - alpha) * self.jerk[idx] + alpha * self.jerk[idx + 1]
+         yaw = (1 - alpha) * self.psi[idx] + alpha * self.psi[idx + 1] if self.psi is not None else 0.0
+         yaw_rate = (1 - alpha) * self.psi_dot[idx] + alpha * self.psi_dot[idx + 1] if self.psi_dot is not None else 0.0
+      return pos, vel, accel, jerk, yaw, yaw_rate
 
    def get_velocity(self) -> np.ndarray:
       '''
@@ -187,8 +215,8 @@ class BaseSolver:
          yaw = trajectory[:, 4]
          yaw_dot = np.gradient(yaw, T)
          yaw_ddot = np.gradient(yaw_dot, T)
-         return Profile(T, velocity, acceleration, jerk, snap, yaw, yaw_dot, yaw_ddot, bv)
-      return Profile(T, velocity, acceleration, jerk, snap)
+         return Profile(T, X.T, velocity, acceleration, jerk, snap, yaw, yaw_dot, yaw_ddot, bv)
+      return Profile(T, X.T, velocity, acceleration, jerk, snap)
    
    def temporal_scale(self, trajectory: np.ndarray, *, set_time = None, max_time = None) -> np.ndarray:
       '''
